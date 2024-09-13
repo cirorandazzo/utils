@@ -2,9 +2,7 @@
 # 2024.05.13 CDR
 #
 # Functions related to processing callback experiment videos
-#
-import cv2 as cv
-import numpy as np
+# 
 
 
 def get_triggers_from_audio(

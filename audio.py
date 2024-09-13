@@ -68,7 +68,7 @@ class AudioObject:
 
         Args should match default constructor.
         """
-        from utils.evfuncs import load_cbin
+        from evfuncs import load_cbin
 
         audio, fs = load_cbin(filename, channel=channel)
 
