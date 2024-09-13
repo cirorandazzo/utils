@@ -20,3 +20,36 @@ def multi_index_from_dict(df, index_dict, keep_current_index=True):
     df_indexed.set_index(index_keys, inplace=True)
 
     return df_indexed
+
+
+def load_syllable_mat(filename):
+    import pandas as pd
+    
+    from pymatreader import read_mat
+
+    data = read_mat(filename)
+
+    data = data["by_syllable"]
+
+    data = pd.DataFrame.from_dict(data)
+
+    data.set_index(keys=["syl", "i"], inplace=True)
+    data.sort_index(inplace=True)
+    data.drop(
+        columns=[
+            "MotifAudio",
+            "deriv1_frame_aligned",
+            "deriv2_frame_aligned",
+        ],
+        inplace=True,
+    )
+    data["nextSyl"] = data["postSyls"].apply(_get_next_syl)
+
+    return data
+
+
+def _get_next_syl(postSyls):
+    if len(postSyls) > 1:
+        return postSyls[1]
+    else:
+        return "END"
