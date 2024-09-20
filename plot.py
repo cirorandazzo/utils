@@ -1,8 +1,9 @@
 # ./utils/plot.py
 # 2024.05.14 CDR
-# 
+#
 # Plotting functions
-# 
+#
+
 
 def make_graph(transition_counts):
     import networkx as nx
@@ -75,10 +76,10 @@ def confusion_matrix_plot(
     labels=None,
     prob=True,
     ax=None,
-    plot_kw={
-        "cmap": "magma",
-        "text_kw": {"size": "x-small"},
-    },
+    cmap="magma",
+    text_kw={"size": "x-small"},
+    values_format=".1e",
+    **plot_kwarg,
 ):
     import matplotlib.pyplot as plt
     import numpy as np
@@ -95,6 +96,14 @@ def confusion_matrix_plot(
         confusion_matrix=cm,
         display_labels=labels,
     )
-    disp.plot(ax=ax, **plot_kw)
+    disp.plot(
+        ax=ax,
+        cmap=cmap,
+        text_kw=text_kw,
+        values_format=values_format,
+        **plot_kwarg,
+    )
 
     return ax
+
+
