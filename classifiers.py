@@ -41,6 +41,8 @@ def plot_all_cms(cms, cm_folder, y, nrows, ncols):
             labels=sorted(np.unique(y)),
             prob=True,
             ax=ax,
+            colorbar=False,
+            values_format=".2f",
         )
 
         ax.set(title=clf_name)
