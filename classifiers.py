@@ -171,6 +171,92 @@ def plot_all_tr_cms(
 
         plt.close()
 
+    return tr_cms
+
+
+def plot_all_tr_cms_diffs(
+        tr_cms,
+        data,
+        y,
+        trans_map,
+        pth,
+        fmt="g",
+        diff_cmap_extremes=[(0,0,0),(1,0,0)],
+        sort_key=None,
+):
+    import os
+
+    import numpy as np
+    import matplotlib.pyplot as plt
+    from matplotlib.colors import LinearSegmentedColormap
+
+    # make true transition confusion matrix (tr_cm)
+    y_trans = data.reset_index().apply(trans_map, axis=1)
+
+    unique_trans = list(np.unique(y_trans))
+    unique_trans.sort(key=sort_key)
+    
+    y_unique = np.unique(y)
+    y_trans_unique = np.unique(y_trans)
+
+    tr_cm_true = make_subcondition_confusion_matrix(
+        true_labels_mapped=y_trans,
+        predicted_labels=y,
+        prob=False,
+        y_pred_unique_labels=y_unique,
+        y_true_unique_labels=y_trans_unique,
+    )
+
+    # plot & save true tr_cm
+    fig, ax = plt.subplots()
+
+    ax = subcondition_confusion_matrix_plot(
+        tr_cm_true,
+        ax=ax,
+        y_pred_unique_labels=y_unique,
+        y_true_unique_labels=y_trans_unique,
+        fmt=fmt,
+    )
+
+    ax.set(title="HYPOTHETICAL: Perfect performance")
+    plt.savefig(os.path.join(pth, "!example-perfect_tm.png"))
+    plt.close()
+
+    # make cmap
+    diff_cmap = LinearSegmentedColormap.from_list("Custom", diff_cmap_extremes, N= np.max(tr_cm_true))
+
+
+    # go thru tr_cms & save/plot diffs
+    tr_cm_diffs = {}
+
+    for clf_name, clf_cms in tr_cms.items():
+        this_cm = np.array(clf_cms).sum(0)  # add all cms together
+        
+        tr_cm_diffs[clf_name] = np.abs(tr_cm_true - this_cm)
+        
+        fig, ax = plt.subplots()
+
+        # vmin/vmax standardize colormap across plots.
+        ax = subcondition_confusion_matrix_plot(
+            tr_cm_diffs[clf_name],
+            ax=ax,
+            y_pred_unique_labels=y_unique,
+            y_true_unique_labels=y_trans_unique,
+            fmt=fmt,
+            cmap=diff_cmap,
+            vmin=0,
+            vmax=np.max(tr_cm_true)/2,
+        )
+
+        tstr = f"!tr_cm_diff-{clf_name}"
+        ax.set(ylabel="True label in context", title=tstr)
+
+        fig.savefig(os.path.join(pth, f"{tstr}.png"))
+        plt.close()
+
+
+    return tr_cm_true, tr_cm_diffs
+    
 
 def train_models(names, classifiers, cv, X, y):
     from sklearn.pipeline import make_pipeline
@@ -209,8 +295,8 @@ def train_models(names, classifiers, cv, X, y):
             y_test = y[ii_test]
 
             scores = {
-                "f1": f1_score(y_test, y_pred, average="weighted"),
                 "score": balanced_accuracy_score(y_test, y_pred),
+                "f1": f1_score(y_test, y_pred, average="weighted"),
                 "precision": precision_score(y_test, y_pred, average="weighted"),
                 "recall": recall_score(y_test, y_pred, average="weighted"),
             }
