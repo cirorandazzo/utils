@@ -54,7 +54,7 @@ def plot_all_cms(cms, cm_folder, y, nrows, ncols):
             prob=True,
         )
 
-        tstr = f"{clf_name} (ALL)"
+        tstr = f"ALL-{clf_name}"
         ax.set(title=tstr)
 
         fig = ax.get_figure()
@@ -67,6 +67,7 @@ def plot_all_cms(cms, cm_folder, y, nrows, ncols):
                 cm,
                 labels=sorted(np.unique(y)),
                 prob=True,
+                values_format=".2f",
             )
 
             tstr = f"{clf_name} ({i})"
@@ -92,6 +93,7 @@ def plot_all_tr_cms(
     cv,
     pth,
     trans_map,
+    fmt="g",
     sort_key=None,
     **unused_kw,
 ):
@@ -142,6 +144,7 @@ def plot_all_tr_cms(
                 ax=ax,
                 y_pred_unique_labels=y_pred_unique,
                 y_true_unique_labels=unique_trans,
+                fmt=fmt,
             )
 
             tstr = f"{clf_name} ({i_cv})"
@@ -158,9 +161,10 @@ def plot_all_tr_cms(
             ax=ax,
             y_pred_unique_labels=y_pred_unique,
             y_true_unique_labels=unique_trans,
+            fmt=fmt,
         )
 
-        tstr = f"{clf_name} (ALL)"
+        tstr = f"ALL-{clf_name}"
         ax.set(ylabel="True label in context", title=tstr)
 
         fig.savefig(os.path.join(pth, f"{tstr}.png"))
