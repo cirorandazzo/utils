@@ -178,6 +178,7 @@ def train_models(names, classifiers, cv, X, y):
         precision_score,
         recall_score,
     )
+    from copy import deepcopy
 
     fitted_classifiers = {}
     performance = {}
@@ -185,22 +186,24 @@ def train_models(names, classifiers, cv, X, y):
 
     for name, clf in zip(names, classifiers):
         performance[name] = {}
-        fitted_classifiers[name] = []
-        cms[name] = []
+        fitted_classifiers[name] = list(range(cv.get_n_splits()))  # preallocate to enable assignment
+        cms[name] = list(range(cv.get_n_splits()))
 
+        empty_clf = make_pipeline(
+            StandardScaler(),
+            # TODO: try PCA
+            clf,
+        )
+        
         for k, (ii_train, ii_test) in enumerate(cv.split(X, y)):
-            X_train, X_test = X[ii_train], X[ii_test]
-            y_train, y_test = y[ii_train], y[ii_test]
 
-            this_clf = make_pipeline(
-                StandardScaler(),
-                # TODO: try PCA
-                clf,
-            )
+            this_clf = deepcopy(empty_clf)
 
-            this_clf.fit(X_train, y_train)
+            this_clf.fit(X[ii_train], y[ii_train])
 
-            y_pred = this_clf.predict(X_test)
+            y_pred = this_clf.predict(X[ii_test])
+            y_test = y[ii_test]
+
             scores = {
                 "f1": f1_score(y_test, y_pred, average="weighted"),
                 "score": balanced_accuracy_score(y_test, y_pred),
@@ -208,7 +211,7 @@ def train_models(names, classifiers, cv, X, y):
                 "recall": recall_score(y_test, y_pred, average="weighted"),
             }
 
-            fitted_classifiers[name].append(this_clf)
+            fitted_classifiers[name][k] = this_clf
 
             for score_name, score in scores.items():
                 if score_name not in performance[name].keys():
@@ -216,8 +219,8 @@ def train_models(names, classifiers, cv, X, y):
                 else:
                     performance[name][score_name].append(score)
 
-            cms[name].append(confusion_matrix(y_test, y_pred))
-            # tms[name].append(confusion_matrix(neural_syl[ii_test], y_pred))  # transition matrix from prediction
+            cm = confusion_matrix(y_test, y_pred)
+            cms[name][k] = cm
 
             print(f"{name:10} ({k}): {scores['score']:.4f}")
 
