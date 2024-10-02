@@ -20,13 +20,20 @@ def cut_calcium_data(
     return row
 
 
-def plot_all_cms(cms, cm_folder, y, nrows, ncols):
+def plot_all_cms(cms, cm_folder, nrows, ncols, y=None, cm_labels=None,):
     import os
 
     import matplotlib.pyplot as plt
     import numpy as np
 
     from .plot import confusion_matrix_plot
+
+    
+    if not((y is None) ^ (cm_labels is None)):
+        raise TypeError("Exactly one of `y` or `labels` must be defined.")
+    
+    if y is not None:
+        cm_labels = sorted(np.unique(y)),
 
     multi_fig, multi_ax = plt.subplots(nrows=nrows, ncols=ncols, figsize=(16, 8))
 
@@ -38,7 +45,7 @@ def plot_all_cms(cms, cm_folder, y, nrows, ncols):
 
         confusion_matrix_plot(
             cm,
-            labels=sorted(np.unique(y)),
+            labels=cm_labels,
             prob=True,
             ax=ax,
             colorbar=False,
@@ -50,8 +57,9 @@ def plot_all_cms(cms, cm_folder, y, nrows, ncols):
         # plot cross-val avg separately
         ax = confusion_matrix_plot(
             cm,
-            labels=sorted(np.unique(y)),
+            labels=cm_labels,
             prob=True,
+            values_format=".2f",
         )
 
         tstr = f"ALL-{clf_name}"
@@ -65,7 +73,7 @@ def plot_all_cms(cms, cm_folder, y, nrows, ncols):
         for i, cm in enumerate(all_cms):
             ax = confusion_matrix_plot(
                 cm,
-                labels=sorted(np.unique(y)),
+                labels=cm_labels,
                 prob=True,
                 values_format=".2f",
             )
@@ -258,7 +266,9 @@ def plot_all_tr_cms_diffs(
     return tr_cm_true, tr_cm_diffs
     
 
-def train_models(names, classifiers, cv, X, y):
+def train_models(names, classifiers, cv, X, y, return_cm_labels=False,):
+    import numpy as np
+
     from sklearn.pipeline import make_pipeline
     from sklearn.preprocessing import StandardScaler
     from sklearn.metrics import (
@@ -273,6 +283,8 @@ def train_models(names, classifiers, cv, X, y):
     fitted_classifiers = {}
     performance = {}
     cms = {}
+
+    y_unique = np.unique(y)
 
     for name, clf in zip(names, classifiers):
         performance[name] = {}
@@ -309,12 +321,15 @@ def train_models(names, classifiers, cv, X, y):
                 else:
                     performance[name][score_name].append(score)
 
-            cm = confusion_matrix(y_test, y_pred)
+            cm = confusion_matrix(y_test, y_pred, labels=y_unique)
             cms[name][k] = cm
 
             print(f"{name:10} ({k}): {scores['score']:.4f}")
 
-    return fitted_classifiers, performance, cms
+    if return_cm_labels:
+        return fitted_classifiers, performance, cms, y_unique
+    else:
+        return fitted_classifiers, performance, cms
 
 
 def make_subcondition_confusion_matrix(
