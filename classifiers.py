@@ -1,6 +1,8 @@
 # classifiers.py
-# 
+#
 # utils for calcium classifiers
+
+from sklearn.preprocessing import StandardScaler
 
 def cut_calcium_data(
     row,
@@ -103,7 +105,7 @@ def plot_all_tr_cms(
     trans_map,
     fmt="g",
     sort_key=None,
-    **unused_kw,
+    **heatmap_kwargs,
 ):
     """
     unused_kw: eats unused kwargs. enables using 'to_save' dicts without deleting params
@@ -153,6 +155,7 @@ def plot_all_tr_cms(
                 y_pred_unique_labels=y_pred_unique,
                 y_true_unique_labels=unique_trans,
                 fmt=fmt,
+                **heatmap_kwargs
             )
 
             tstr = f"{clf_name} ({i_cv})"
@@ -170,9 +173,10 @@ def plot_all_tr_cms(
             y_pred_unique_labels=y_pred_unique,
             y_true_unique_labels=unique_trans,
             fmt=fmt,
+            **heatmap_kwargs
         )
 
-        tstr = f"ALL-{clf_name}"
+        tstr = f"!ALL-{clf_name}"
         ax.set(ylabel="True label in context", title=tstr)
 
         fig.savefig(os.path.join(pth, f"{tstr}.png"))
@@ -203,7 +207,7 @@ def plot_all_tr_cms_diffs(
 
     unique_trans = list(np.unique(y_trans))
     unique_trans.sort(key=sort_key)
-    
+
     y_unique = np.unique(y)
     y_trans_unique = np.unique(y_trans)
 
@@ -233,15 +237,14 @@ def plot_all_tr_cms_diffs(
     # make cmap
     diff_cmap = LinearSegmentedColormap.from_list("Custom", diff_cmap_extremes, N= np.max(tr_cm_true))
 
-
     # go thru tr_cms & save/plot diffs
     tr_cm_diffs = {}
 
     for clf_name, clf_cms in tr_cms.items():
         this_cm = np.array(clf_cms).sum(0)  # add all cms together
-        
+
         tr_cm_diffs[clf_name] = np.abs(tr_cm_true - this_cm)
-        
+
         fig, ax = plt.subplots()
 
         # vmin/vmax standardize colormap across plots.
@@ -262,15 +265,21 @@ def plot_all_tr_cms_diffs(
         fig.savefig(os.path.join(pth, f"{tstr}.png"))
         plt.close()
 
-
     return tr_cm_true, tr_cm_diffs
-    
 
-def train_models(names, classifiers, cv, X, y, return_cm_labels=False,):
+
+def train_models(
+    names,
+    classifiers,
+    cv,
+    X,
+    y,
+    preprocessing_steps = [StandardScaler()],
+    return_cm_labels=False,
+):
     import numpy as np
 
     from sklearn.pipeline import make_pipeline
-    from sklearn.preprocessing import StandardScaler
     from sklearn.metrics import (
         balanced_accuracy_score,
         confusion_matrix,
@@ -292,11 +301,10 @@ def train_models(names, classifiers, cv, X, y, return_cm_labels=False,):
         cms[name] = list(range(cv.get_n_splits()))
 
         empty_clf = make_pipeline(
-            StandardScaler(),
-            # TODO: try PCA
+            *preprocessing_steps,
             clf,
         )
-        
+
         for k, (ii_train, ii_test) in enumerate(cv.split(X, y)):
 
             this_clf = deepcopy(empty_clf)
