@@ -22,7 +22,16 @@ def cut_calcium_data(
     return row
 
 
-def plot_all_cms(cms, cm_folder, nrows, ncols, y=None, cm_labels=None,):
+def plot_all_cms(
+    cms,
+    cm_folder,
+    nrows,
+    ncols,
+    y=None,
+    cm_labels=None,
+    figure_extension="svg",
+    skip_crossfolds=True,
+):
     import os
 
     import matplotlib.pyplot as plt
@@ -30,10 +39,9 @@ def plot_all_cms(cms, cm_folder, nrows, ncols, y=None, cm_labels=None,):
 
     from .plot import confusion_matrix_plot
 
-    
     if not((y is None) ^ (cm_labels is None)):
         raise TypeError("Exactly one of `y` or `labels` must be defined.")
-    
+
     if y is not None:
         cm_labels = sorted(np.unique(y)),
 
@@ -68,30 +76,31 @@ def plot_all_cms(cms, cm_folder, nrows, ncols, y=None, cm_labels=None,):
         ax.set(title=tstr)
 
         fig = ax.get_figure()
-        fig.savefig(os.path.join(cm_folder, f"{tstr}.png"))
+        fig.savefig(os.path.join(cm_folder, f"{tstr}.{figure_extension}"))
         plt.close(fig)
 
         # plot each crossfold
-        for i, cm in enumerate(all_cms):
-            ax = confusion_matrix_plot(
-                cm,
-                labels=cm_labels,
-                prob=True,
-                values_format=".2f",
-            )
+        if not skip_crossfolds:
+            for i, cm in enumerate(all_cms):
+                ax = confusion_matrix_plot(
+                    cm,
+                    labels=cm_labels,
+                    prob=True,
+                    values_format=".2f",
+                )
 
-            tstr = f"{clf_name} ({i})"
-            ax.set(title=tstr)
+                tstr = f"{clf_name} ({i})"
+                ax.set(title=tstr)
 
-            fig = ax.get_figure()
-            fig.savefig(os.path.join(cm_folder, f"{tstr}.png"))
-            plt.close(fig)
+                fig = ax.get_figure()
+                fig.savefig(os.path.join(cm_folder, f"{tstr}.{figure_extension}"))
+                plt.close(fig)
 
     for empty_ax in np.ravel(multi_ax)[len(cms) - np.size(multi_ax) :]:
         empty_ax.axis("off")
 
     multi_fig.tight_layout()
-    multi_fig.savefig(os.path.join(cm_folder, f"!cm_all_classifiers.png"))
+    multi_fig.savefig(os.path.join(cm_folder, f"!cm_all_classifiers.{figure_extension}"))
     plt.close(multi_fig)
 
 
@@ -105,6 +114,8 @@ def plot_all_tr_cms(
     trans_map,
     fmt="g",
     sort_key=None,
+    figure_extension="svg",
+    skip_crossfolds=True,
     **heatmap_kwargs,
 ):
     """
@@ -146,23 +157,24 @@ def plot_all_tr_cms(
 
             tr_cms[clf_name].append(cm)
 
-            # plot
-            fig, ax = plt.subplots()
+            # plot individual crossfolds
+            if not skip_crossfolds:
+                fig, ax = plt.subplots()
 
-            ax = subcondition_confusion_matrix_plot(
-                cm,
-                ax=ax,
-                y_pred_unique_labels=y_pred_unique,
-                y_true_unique_labels=unique_trans,
-                fmt=fmt,
-                **heatmap_kwargs
-            )
+                ax = subcondition_confusion_matrix_plot(
+                    cm,
+                    ax=ax,
+                    y_pred_unique_labels=y_pred_unique,
+                    y_true_unique_labels=unique_trans,
+                    fmt=fmt,
+                    **heatmap_kwargs
+                )
 
-            tstr = f"{clf_name} ({i_cv})"
-            ax.set(ylabel="True label in context", title=tstr)
+                tstr = f"{clf_name} ({i_cv})"
+                ax.set(ylabel="True label in context", title=tstr)
 
-            fig.savefig(os.path.join(pth, f"{tstr}.png"))
-            plt.close()
+                fig.savefig(os.path.join(pth, f"{tstr}.{figure_extension}"))
+                plt.close()
 
         cm = np.array(tr_cms[clf_name]).sum(0)  # add all cms together
 
@@ -179,7 +191,7 @@ def plot_all_tr_cms(
         tstr = f"!ALL-{clf_name}"
         ax.set(ylabel="True label in context", title=tstr)
 
-        fig.savefig(os.path.join(pth, f"{tstr}.png"))
+        fig.savefig(os.path.join(pth, f"{tstr}.{figure_extension}"))
 
         plt.close()
 
@@ -195,6 +207,7 @@ def plot_all_tr_cms_diffs(
         fmt="g",
         diff_cmap_extremes=[(0,0,0),(1,0,0)],
         sort_key=None,
+        figure_extension="svg",
 ):
     import os
 
@@ -231,7 +244,7 @@ def plot_all_tr_cms_diffs(
     )
 
     ax.set(title="HYPOTHETICAL: Perfect performance")
-    plt.savefig(os.path.join(pth, "!example-perfect_tm.png"))
+    plt.savefig(os.path.join(pth, f"!example-perfect_tm.{figure_extension}"))
     plt.close()
 
     # make cmap
@@ -262,7 +275,7 @@ def plot_all_tr_cms_diffs(
         tstr = f"!tr_cm_diff-{clf_name}"
         ax.set(ylabel="True label in context", title=tstr)
 
-        fig.savefig(os.path.join(pth, f"{tstr}.png"))
+        fig.savefig(os.path.join(pth, f"{tstr}.{figure_extension}"))
         plt.close()
 
     return tr_cm_true, tr_cm_diffs
