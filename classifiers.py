@@ -12,7 +12,7 @@ def cut_calcium_data(
     import numpy as np
 
     x = row["x"]
-    first = np.flatnonzero((x[1:] > 0) & (x[:-1] < 0))[
+    first = np.flatnonzero((x[1:] >= 0) & (x[:-1] < 0))[
         0
     ]  # first Ca frame post-syl onset
 
