@@ -25,6 +25,17 @@ def draw_graph(
     G,
     ax=None,
     graphviz_layout="neato",
+    node_kwargs={
+        "node_color": "w",  # [[0.3, 0.5, 0.8]],
+        "node_size": 400,
+        "edgecolors": "k",
+    },
+    edge_kwargs={
+        "arrows": True,
+        "arrowsize": 12,
+        "width": 0.5,
+    },
+    font_kwargs={},
 ):
     import networkx as nx
     import matplotlib.pyplot as plt
@@ -41,22 +52,10 @@ def draw_graph(
     # pos = nx.shell_layout(G)
     # pos = nx.arf_layout(G)
 
-    nodes = nx.draw_networkx_nodes(
-        G,
-        pos,
-        node_color="w",  # [[0.3, 0.5, 0.8]],
-        node_size=400,
-        edgecolors="k",
-    )
+    nodes = nx.draw_networkx_nodes(G, pos, **node_kwargs)
     labels = nx.draw_networkx_labels(G, pos)
 
-    edges = nx.draw_networkx_edges(
-        G,
-        pos,
-        arrows=True,
-        arrowsize=12,
-        width=0.5,
-    )
+    edges = nx.draw_networkx_edges(G, pos, **edge_kwargs)
 
     weights = nx.get_edge_attributes(G, "weight")
     if isinstance(list(weights.values())[0], float):  # make float labels 2 dec
@@ -66,6 +65,7 @@ def draw_graph(
         G,
         pos,
         edge_labels=weights,
+        **font_kwargs,
     )
 
     return ax
@@ -105,5 +105,3 @@ def confusion_matrix_plot(
     )
 
     return ax
-
-
