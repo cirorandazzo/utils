@@ -1,6 +1,7 @@
 # file.py
-# 
-# 
+#
+#
+
 
 def multi_index_from_dict(df, index_dict, keep_current_index=True):
     """

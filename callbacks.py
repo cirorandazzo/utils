@@ -32,7 +32,7 @@ def call_mat_stim_trial_loader(
 
     calls = _read_calls_from_mat(data, from_notmat=from_notmat)
     file_info = _read_file_info_from_mat(data, from_notmat=from_notmat)
-    
+
     calls.index.name = calls_index_name
 
     del data  # don't store twice, it's already saved elsewhere
@@ -59,7 +59,9 @@ def call_mat_stim_trial_loader(
     if verbose:
         print(f"Rejecting call types not in: {acceptable_call_labels}")
 
-    assert (stim_type_label in acceptable_call_labels), f"Warning! Using label `{stim_type_label}` used to align trials but not listed as an acceptable call type."
+    assert (
+        stim_type_label in acceptable_call_labels
+    ), f"Warning! Using label `{stim_type_label}` used to align trials but not listed as an acceptable call type."
 
     stim_trials, rejected_trials, call_types = reject_stim_trials(
         stim_trials,

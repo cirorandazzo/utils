@@ -4,10 +4,12 @@ Python implementations of functions used with EvTAF and evsonganaly.m
 
 thanks annie :^)
 """
-#from pathlib import Path
+
+# from pathlib import Path
 
 import numpy as np
 import os
+
 
 def readrecf(filename):
     """reads .rec files output by EvTAF
@@ -58,10 +60,10 @@ def readrecf(filename):
     >>> print(f"file duration in seconds: {num_samples / sample_freq:.3f}")
     file duration in seconds: 12.305
     """
-    #filename = Path(filename)
+    # filename = Path(filename)
 
     rec_dict = {}
-    with open(filename, 'r') as recfile:
+    with open(filename, "r") as recfile:
         line_tmp = ""
         while 1:
             if line_tmp == "":
@@ -75,38 +77,39 @@ def readrecf(filename):
             elif line == "\n":  # if blank line
                 continue
             elif "Catch" in line:
-                ind = line.find('=')
-                rec_dict['iscatch'] = line[ind + 1:]
+                ind = line.find("=")
+                rec_dict["iscatch"] = line[ind + 1 :]
             elif "Chans" in line:
-                ind = line.find('=')
-                rec_dict['num_channels'] = int(line[ind + 1:])
+                ind = line.find("=")
+                rec_dict["num_channels"] = int(line[ind + 1 :])
             elif "ADFREQ" in line:
-                ind = line.find('=')
+                ind = line.find("=")
                 try:
-                    rec_dict['sample_freq'] = int(line[ind + 1:])
+                    rec_dict["sample_freq"] = int(line[ind + 1 :])
                 except ValueError:
                     # if written with scientific notation
                     # first parse as float, then cast to int
-                    sample_freq_float = float(line[ind + 1:])
+                    sample_freq_float = float(line[ind + 1 :])
                     try:
-                        rec_dict['sample_freq'] = int(sample_freq_float)
+                        rec_dict["sample_freq"] = int(sample_freq_float)
                     except ValueError:
-                        raise ValueError("Couldn't convert following value for "
-                                         "ADFREQ in .rec file {} to an integer: "
-                                         "{}".format(filename,
-                                                     sample_freq_float))
+                        raise ValueError(
+                            "Couldn't convert following value for "
+                            "ADFREQ in .rec file {} to an integer: "
+                            "{}".format(filename, sample_freq_float)
+                        )
             elif "Samples" in line:
-                ind = line.find('=')
-                rec_dict['num_samples'] = int(line[ind + 1:])
+                ind = line.find("=")
+                rec_dict["num_samples"] = int(line[ind + 1 :])
             elif "T After" in line or "T AFTER" in line:
-                ind = line.find('=')
-                rec_dict['time_after'] = float(line[ind + 1:])
+                ind = line.find("=")
+                rec_dict["time_after"] = float(line[ind + 1 :])
             elif "T Before" in line or "T BEFORE" in line:
-                ind = line.find('=')
-                rec_dict['time_before'] = float(line[ind + 1:])
+                ind = line.find("=")
+                rec_dict["time_before"] = float(line[ind + 1 :])
             elif "Output Sound File" in line:
-                ind = line.find('=')
-                rec_dict['outfile'] = line[ind + 1:]
+                ind = line.find("=")
+                rec_dict["outfile"] = line[ind + 1 :]
             elif "Thresholds" in line or "THRESHOLDS" in line:
                 th_list = []
                 while 1:
@@ -118,7 +121,7 @@ def readrecf(filename):
                     except ValueError:  # because we reached next section
                         line_tmp = line
                         break
-                rec_dict['thresholds'] = th_list
+                rec_dict["thresholds"] = th_list
                 if line == "":
                     break
             elif "Feedback information" in line:
@@ -130,11 +133,11 @@ def readrecf(filename):
                     elif line == "\n":
                         continue
                     ind = line.find("msec")
-                    time = float(line[:ind - 1])
+                    time = float(line[: ind - 1])
                     ind = line.find(":")
-                    fb_type = line[ind + 2:]
+                    fb_type = line[ind + 2 :]
                     fb_dict[time] = fb_type
-                rec_dict['feedback_info'] = fb_dict
+                rec_dict["feedback_info"] = fb_dict
                 if line == "":
                     break
             elif "File created" in line:
@@ -142,7 +145,7 @@ def readrecf(filename):
                 for counter in range(4):
                     line = recfile.readline()
                     header.append(line)
-                rec_dict['header'] = header
+                rec_dict["header"] = header
     return rec_dict
 
 
@@ -170,14 +173,14 @@ def load_cbin(filename, channel=0):
     >>> data
     array([-230, -223, -235, ...,   34,   36,   26], dtype=int16)
     """
-    #filename = Path(filename)
+    # filename = Path(filename)
 
     # .cbin files are big endian, 16 bit signed int, hence dtype=">i2" below
     filename = os.fspath(str(filename))
     data = np.fromfile(filename, dtype=">i2")
-    cbin_removed_path = '.'.join(filename.split('.')[0:2])
-    recfile = cbin_removed_path + '.rec'
+    cbin_removed_path = ".".join(filename.split(".")[0:2])
+    recfile = cbin_removed_path + ".rec"
     rec_dict = readrecf(recfile)
-    data = data[channel::rec_dict['num_channels']]  # step by number of channels
-    sample_freq = rec_dict['sample_freq']
+    data = data[channel :: rec_dict["num_channels"]]  # step by number of channels
+    sample_freq = rec_dict["sample_freq"]
     return data, sample_freq
