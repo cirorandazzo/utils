@@ -2,7 +2,7 @@
 # 2024.05.13 CDR
 #
 # Functions related to loading & preprocessing callback data
-# 
+#
 # Renamed callbacks.py from deepsqueak.py
 
 ESA_LOOKUP = {"c": "Call", "s": "Stimulus", "n": "Song", "z": "Song"}
@@ -49,6 +49,10 @@ def call_mat_stim_trial_loader(
         calls_index_name=calls_index_name,
         stims_index_name=stims_index_name,
     )
+
+    if stim_trials is None:
+        return None
+
     stim_trials["wav_filename"] = file_info["wav_filename"]
 
     # reject rows of stim_trials with bad call types
@@ -153,6 +157,13 @@ def construct_stim_trial_df(
 
     stim_trials = pd.DataFrame()
 
+    if len(stims) == 0:
+        import warnings
+
+        warnings.warn("No stimuli found in this file!")
+
+        return None
+
     # trial start: stimulus onset
     stim_trials["trial_start_s"] = stims["start_s"]
 
@@ -195,7 +206,6 @@ def construct_stim_trial_df(
     # stim_trials['latency_s'] = [np.min(calls[:,0]) if len(calls)>0 else np.nan for calls in stim_trials['call_times_stim_aligned']]
 
     # NOTE: does not just count call indices in `calls_in_range`, which can include calls that have onset before stimulus.
-
 
     # reindex stim trials by stim # in block, but store call # for each stim
     stim_trials[calls_index_name] = stim_trials.index
@@ -284,5 +294,3 @@ def reject_stim_trials(
     stim_trials = stim_trials[~to_reject]
 
     return stim_trials, rejected_trials, call_types
-
-
