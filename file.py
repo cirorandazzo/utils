@@ -1,6 +1,6 @@
 # file.py
-# 
-# 
+#
+#
 
 def multi_index_from_dict(df, index_dict, keep_current_index=True):
     """
@@ -22,9 +22,12 @@ def multi_index_from_dict(df, index_dict, keep_current_index=True):
     return df_indexed
 
 
-def load_syllable_mat(filename):
+def load_syllable_mat(
+    filename,
+    parse_nextSyl=True,
+):
     import pandas as pd
-    
+
     from pymatreader import read_mat
 
     data = read_mat(filename)
@@ -43,7 +46,9 @@ def load_syllable_mat(filename):
         ],
         inplace=True,
     )
-    data["nextSyl"] = data["postSyls"].apply(_get_next_syl)
+
+    if parse_nextSyl:
+        data["nextSyl"] = data["postSyls"].apply(_get_next_syl)
 
     return data
 
