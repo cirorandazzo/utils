@@ -54,6 +54,55 @@ def load_syllable_mat(
     return data
 
 
+def load_burst_mat(file):
+    import numpy as np
+    import pandas as pd
+
+    from pymatreader import read_mat
+
+    data = read_mat(file)
+
+    bp_syl_num = data.pop("BPsylNum")
+
+    index = pd.MultiIndex.from_arrays(
+        arrays=(
+            range(len(data["burst_roi"])),
+            data["burst_roi"].astype(int),
+            data["burst_time_sub"],
+        ),
+        names=("burst_id", "roi", "time"),
+    )
+
+    [data.pop(x) for x in ["burst_branch", "burst_time", "finalLocs"]]
+
+    df = pd.DataFrame()
+
+    for tr in range(data["burst_deriv"].shape[1]):
+        df = pd.concat(
+            [
+                df,
+                pd.DataFrame.from_dict(
+                    {
+                        "trial": tr,
+                        "burst_dff": data["burst_dff"][:, tr],
+                        "burst_deriv": data["burst_deriv"][:, tr],
+                        "branch_id": int(data["ID"][tr]),
+                    },
+                ).set_index(["trial", index]),
+            ]
+        )
+
+    df["syl"] = np.floor(df.index.get_level_values("time")).astype(int)
+
+    # remove too-early stuff & post-branch stuff
+    df = df.loc[(df["syl"] >= -1 * bp_syl_num) & (df["syl"] <= 0)]
+
+    # and make positive for consistency with previous code
+    df["syl"] = np.abs(df["syl"])
+
+    return df
+
+
 def _get_next_syl(postSyls):
     if len(postSyls) > 1:
         return postSyls[1]
