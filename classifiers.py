@@ -2,7 +2,6 @@
 #
 # utils for calcium classifiers
 
-from sklearn.preprocessing import StandardScaler
 
 def cut_calcium_data(
     row,
@@ -22,6 +21,101 @@ def cut_calcium_data(
     return row
 
 
+def make_scores_df(
+    path,
+    classifier_filename="classifiers.pickle",
+    max_syls=15,
+    syl_folder_prefix="n",
+    neg_syls=True,
+):
+    """
+    Generate a DataFrame containing performance scores of classifiers across syllables.
+
+    This function searches for classifier performance data stored in pickle files.
+    It compiles the performance of various models across cross-validation folds into a single
+    DataFrame, indexed by syllable number, model name, and fold index.
+
+    Parameters:
+    ----------
+    path : str
+        The directory path where syllable folders are located. Each folder should contain
+        a classifier pickle file.
+
+    classifier_filename : str, optional
+        The filename of the classifier pickle file within each syllable folder.
+        Default is "classifiers.pickle".
+
+    max_syls : int, optional
+        The maximum number of syllables to process. The function will stop if a folder
+        corresponding to a syllable number does not exist. Default is 15.
+
+    syl_folder_prefix : str, optional
+        A prefix that precedes the syllable number in folder names.
+        Default is "n", but can also be set to "nPl", etc.
+
+    neg_syls : bool, optional
+        If True, returns syllable indices as negative (ie, -4 for 4 syls before divergent syl). Default is True.
+
+    Returns:
+    -------
+    pandas.DataFrame
+        A DataFrame containing the performance scores, indexed by syllable number, model name,
+        and cross-validation fold index. The DataFrame includes columns for syllable number
+        (`syl`), model name (`model`), and cross-validation fold index (`xfold`).
+
+    Notes:
+    -----
+    - The function loads performance data from each classifier's pickle file, which is expected
+      to contain a dictionary with a "performance" key.
+    - If the specified folder for a syllable does not exist, the function will terminate early.
+    - The resulting DataFrame will be empty if no valid classifier files are found.
+
+    Example:
+    --------
+    >>> scores_df = make_scores_dict("/path/to/syllables")
+    """
+
+    import os
+    import pickle
+
+    import numpy as np
+    import pandas as pd
+
+    all_scores = pd.DataFrame()  # Initialize an empty DataFrame to store all scores
+
+    for i_syl in range(max_syls):
+        # Load classifier.pickle details; stop if syllable folder not found
+        file = os.path.join(path, f"{syl_folder_prefix}{i_syl}", classifier_filename)
+
+        if not os.path.exists(file):
+            break
+
+        with open(file, "rb") as f:
+            data = pickle.load(f)
+            performance = data["performance"]
+            del data
+
+        # Make a DataFrame containing all models & all crossfolds for this syllable
+        this_syl = pd.DataFrame()
+        for model, model_performance in performance.items():
+            this_model = pd.DataFrame(model_performance)
+            this_model["model"] = model
+            this_model["xfold"] = this_model.index
+
+            this_syl = pd.concat([this_syl, this_model])
+
+        if neg_syls:
+            this_syl["syl"] = -1 * i_syl
+        else:
+            this_syl["syl"] = i_syl
+
+        all_scores = pd.concat([all_scores, this_syl])
+
+    all_scores.set_index(["syl", "model", "xfold"], inplace=True)
+
+    return all_scores
+
+
 def plot_all_cms(
     cms,
     cm_folder,
@@ -39,11 +133,11 @@ def plot_all_cms(
 
     from .plot import confusion_matrix_plot
 
-    if not((y is None) ^ (cm_labels is None)):
+    if not ((y is None) ^ (cm_labels is None)):
         raise TypeError("Exactly one of `y` or `labels` must be defined.")
 
     if y is not None:
-        cm_labels = sorted(np.unique(y)),
+        cm_labels = (sorted(np.unique(y)),)
 
     multi_fig, multi_ax = plt.subplots(nrows=nrows, ncols=ncols, figsize=(16, 8))
 
@@ -100,7 +194,9 @@ def plot_all_cms(
         empty_ax.axis("off")
 
     multi_fig.tight_layout()
-    multi_fig.savefig(os.path.join(cm_folder, f"!cm_all_classifiers.{figure_extension}"))
+    multi_fig.savefig(
+        os.path.join(cm_folder, f"!cm_all_classifiers.{figure_extension}")
+    )
     plt.close(multi_fig)
 
 
@@ -167,7 +263,7 @@ def plot_all_tr_cms(
                     y_pred_unique_labels=y_pred_unique,
                     y_true_unique_labels=unique_trans,
                     fmt=fmt,
-                    **heatmap_kwargs
+                    **heatmap_kwargs,
                 )
 
                 tstr = f"{clf_name} ({i_cv})"
@@ -185,7 +281,7 @@ def plot_all_tr_cms(
             y_pred_unique_labels=y_pred_unique,
             y_true_unique_labels=unique_trans,
             fmt=fmt,
-            **heatmap_kwargs
+            **heatmap_kwargs,
         )
 
         tstr = f"!ALL-{clf_name}"
@@ -199,15 +295,15 @@ def plot_all_tr_cms(
 
 
 def plot_all_tr_cms_diffs(
-        tr_cms,
-        data,
-        y,
-        trans_map,
-        pth,
-        fmt="g",
-        diff_cmap_extremes=[(0,0,0),(1,0,0)],
-        sort_key=None,
-        figure_extension="svg",
+    tr_cms,
+    data,
+    y,
+    trans_map,
+    pth,
+    fmt="g",
+    diff_cmap_extremes=[(0, 0, 0), (1, 0, 0)],
+    sort_key=None,
+    figure_extension="svg",
 ):
     import os
 
@@ -248,7 +344,9 @@ def plot_all_tr_cms_diffs(
     plt.close()
 
     # make cmap
-    diff_cmap = LinearSegmentedColormap.from_list("Custom", diff_cmap_extremes, N= np.max(tr_cm_true))
+    diff_cmap = LinearSegmentedColormap.from_list(
+        "Custom", diff_cmap_extremes, N=np.max(tr_cm_true)
+    )
 
     # go thru tr_cms & save/plot diffs
     tr_cm_diffs = {}
@@ -269,7 +367,7 @@ def plot_all_tr_cms_diffs(
             fmt=fmt,
             cmap=diff_cmap,
             vmin=0,
-            vmax=np.max(tr_cm_true)/2,
+            vmax=np.max(tr_cm_true) / 2,
         )
 
         tstr = f"!tr_cm_diff-{clf_name}"
@@ -281,13 +379,110 @@ def plot_all_tr_cms_diffs(
     return tr_cm_true, tr_cm_diffs
 
 
+def plot_scores(
+    mean_scores,
+    ax=None,
+    horizontal_reference_line=0.5,
+    **ax_kwargs,
+):
+    """
+    Plot the mean scores of models across different conditions or folds.
+
+    This function generates a line plot of mean scores, with the option to include
+    a horizontal reference line. It can either create a new plot or use an existing
+    axes object for customization.
+
+    Parameters:
+    ----------
+    mean_scores : pandas.DataFrame
+        A DataFrame where each row represents the mean scores of a different model
+        or condition, and each column corresponds to a different evaluation metric
+        or cross-validation fold.
+
+    ax : matplotlib.axes.Axes, optional
+        An existing matplotlib Axes object to plot on. If not provided, a new figure
+        and axes will be created. Default is None.
+
+    horizontal_reference_line : float, optional
+        A y-value for the horizontal reference line across the plot. If set to None,
+        no line will be plotted. Default is 0.5.
+
+    **ax_kwargs : keyword arguments
+        Additional keyword arguments to customize the Axes object, such as labels,
+        limits, etc.
+
+    Returns:
+    -------
+    matplotlib.axes.Axes
+        The Axes object with the plotted scores.
+
+    Notes:
+    -----
+    - The function expects `mean_scores` to be a DataFrame, where the index represents
+      different models or conditions, and the columns represent different score metrics.
+    - The plotted line for each model will have an alpha transparency of 0.8 for better
+      visualization.
+    - If an Axes object is created, it will have a default size of (12, 6) inches.
+
+    Example:
+    --------
+    >>> import pandas as pd
+    >>> import numpy as np
+    >>> mean_scores = pd.DataFrame({
+    >>>     'Fold 1': [0.6, 0.7, 0.8],
+    >>>     'Fold 2': [0.65, 0.75, 0.85]
+    >>> }, index=['Model A', 'Model B', 'Model C'])
+    >>> ax = plot_scores(mean_scores)
+    >>> plt.show()
+    """
+
+    import matplotlib.pyplot as plt
+    import numpy as np
+
+    if ax is None:
+        fig, ax = plt.subplots(figsize=(12, 6))
+
+    # draw a horizontal line, by default at y=0.5
+    if horizontal_reference_line is not None:
+        ax.plot(
+            [min(mean_scores.columns), max(mean_scores.columns)],
+            horizontal_reference_line * np.array([1, 1]),
+            c="k",
+            linestyle="--",
+            linewidth=0.5,
+            alpha=0.5,
+        )
+
+    # plot all rows of mean_scores
+    # TODO: enable errorbar with fill. pass another df with matching indices?
+    # see https://stackoverflow.com/questions/63419636/show-error-bar-in-multi-line-plot-using-matplotlib
+
+    mean_scores.apply(
+        lambda x: ax.plot(
+            x,
+            label=x.name,
+            alpha=0.8,
+        ),
+        axis=1,
+        result_type="reduce",
+    )
+
+    ax.legend(loc="best")
+    ax.set(
+        xticks=np.arange(min(mean_scores.columns), max(mean_scores.columns)),
+        **ax_kwargs,
+    )
+
+    return ax
+
+
 def train_models(
     names,
     classifiers,
     cv,
     X,
     y,
-    preprocessing_steps = [StandardScaler()],
+    preprocessing_steps=[],
     return_cm_labels=False,
 ):
     import numpy as np
@@ -310,7 +505,9 @@ def train_models(
 
     for name, clf in zip(names, classifiers):
         performance[name] = {}
-        fitted_classifiers[name] = list(range(cv.get_n_splits()))  # preallocate to enable assignment
+        fitted_classifiers[name] = list(
+            range(cv.get_n_splits())
+        )  # preallocate to enable assignment
         cms[name] = list(range(cv.get_n_splits()))
 
         empty_clf = make_pipeline(
