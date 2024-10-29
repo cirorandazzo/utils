@@ -383,14 +383,20 @@ def plot_scores(
     mean_scores,
     ax=None,
     horizontal_reference_line=0.5,
-    **ax_kwargs,
+    condition_plot_kwargs={},
+    default_plot_kwargs={},
+    alpha=0.8,
+    **all_plot_kwargs
 ):
     """
     Plot the mean scores of models across different conditions or folds.
 
-    This function generates a line plot of mean scores, with the option to include
-    a horizontal reference line. It can either create a new plot or use an existing
-    axes object for customization.
+    This function generates a line plot of mean scores, with an option to 
+    include a horizontal reference line. It can create a new plot or utilize
+    an existing axes object for customization.
+
+    Note: it's often useful to set Axes cycler in advance, eg with
+    >>> ax.set_prop_cycle(color=plt.cm.Set2.colors)
 
     Parameters:
     ----------
@@ -407,7 +413,18 @@ def plot_scores(
         A y-value for the horizontal reference line across the plot. If set to None,
         no line will be plotted. Default is 0.5.
 
-    **ax_kwargs : keyword arguments
+    alpha : float, optional
+        The transparency level of the plotted lines. Default is 0.8.
+
+    condition_plot_kwargs : dict, optional
+        A dictionary of keyword arguments for customizing the plot for each condition.
+        These will override default_plot_kwargs for the respective model.
+
+    default_plot_kwargs : dict, optional
+        A dictionary of default keyword arguments to customize the plot, such as line style,
+        color, etc. These will be applied to all models unless overridden by condition_plot_kwargs.
+
+    **all_plot_kwargs : keyword arguments
         Additional keyword arguments to customize the Axes object, such as labels,
         limits, etc.
 
@@ -418,21 +435,30 @@ def plot_scores(
 
     Notes:
     -----
-    - The function expects `mean_scores` to be a DataFrame, where the index represents
+    - The function expects `mean_scores` to be a DataFrame where the index represents
       different models or conditions, and the columns represent different score metrics.
-    - The plotted line for each model will have an alpha transparency of 0.8 for better
-      visualization.
+    - The plotted lines will have an alpha transparency of 0.8 for better visualization.
     - If an Axes object is created, it will have a default size of (12, 6) inches.
 
     Example:
     --------
+    Plot Model A in red, every other model in black, and all models with dashed linestyle
+
     >>> import pandas as pd
     >>> import numpy as np
+    >>> import matplotlib.pyplot as plt
+
     >>> mean_scores = pd.DataFrame({
-    >>>     'Fold 1': [0.6, 0.7, 0.8],
-    >>>     'Fold 2': [0.65, 0.75, 0.85]
-    >>> }, index=['Model A', 'Model B', 'Model C'])
-    >>> ax = plot_scores(mean_scores)
+    >>>     '1': [0.6, 0.7, 0.8],
+    >>>     '2': [0.65, 0.75, 0.85]
+    >>>     }, index=['Model A', 'Model B', 'Model C'])
+    >>> ax = plot_scores(
+    >>>     mean_scores,
+    >>>     condition_plot_kwargs = {
+    >>>         "Model A": {"color": "red"},
+    >>>     },
+    >>>     default_plot_kwargs = {"color": "black"},
+    >>>     linestyle="--",)
     >>> plt.show()
     """
 
@@ -461,7 +487,10 @@ def plot_scores(
         lambda x: ax.plot(
             x,
             label=x.name,
-            alpha=0.8,
+            alpha=alpha,
+            # use condition kwargs if given, else use default.
+            **(condition_plot_kwargs.get(x.name, default_plot_kwargs)),
+            **all_plot_kwargs,
         ),
         axis=1,
         result_type="reduce",
@@ -469,8 +498,7 @@ def plot_scores(
 
     ax.legend(loc="best")
     ax.set(
-        xticks=np.arange(min(mean_scores.columns), max(mean_scores.columns)),
-        **ax_kwargs,
+        xticks=np.arange(min(mean_scores.columns), max(mean_scores.columns)+1),
     )
 
     return ax
