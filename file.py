@@ -86,3 +86,27 @@ def convert_image(
         filepath_new = os.path.split(filepath_new)[-1]
 
     return filepath_new
+
+
+def parse_parameter_from_string(string, parameter_name):
+    """
+    Note: rejects first character after parameter_name match, presuming there's a symbol there (eg, "max_features_7" --> "7")
+    """
+    import re
+
+    whole_match = re.search(rf"({parameter_name})\w+", string)[0]
+
+    # return everything after "parameter_name"
+    return whole_match[len(parameter_name) + 1 :]
+
+
+def parse_birdname(
+    string,
+    birdname_regex=r"([a-z]{1,2}[0-9]{1,2}){2}",
+):
+    """
+    Cuts out typical bird identifier from a string. Default format: AA#(#)AA#(#), where A is a letter, # is an obligate number, and (#) is an optional number.
+    """
+    import re
+
+    return re.search(birdname_regex, string)[0]
