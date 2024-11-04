@@ -175,16 +175,20 @@ def convert_image(
     return filepath_new
 
 
-def parse_parameter_from_string(string, parameter_name):
+def parse_parameter_from_string(
+    string,
+    parameter_name,
+    chars_to_ignore=1,
+):
     """
-    Note: rejects first character after parameter_name match, presuming there's a symbol there (eg, "max_features_7" --> "7")
+    Note: rejects `chars_to_ignore` characters after parameter_name match, eg, 1 if there's a symbol there (eg, "max_features_7" --> "7")
     """
     import re
 
-    whole_match = re.search(rf"({parameter_name})\w+", string)[0]
+    whole_match = re.search(rf"({parameter_name})(\w\.?)+", string)[0]
 
     # return everything after "parameter_name"
-    return whole_match[len(parameter_name) + 1 :]
+    return whole_match[len(parameter_name) + chars_to_ignore :]
 
 
 def parse_birdname(
