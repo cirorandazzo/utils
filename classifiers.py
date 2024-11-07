@@ -386,12 +386,12 @@ def plot_scores(
     condition_plot_kwargs={},
     default_plot_kwargs={},
     alpha=0.8,
-    **all_plot_kwargs
+    **all_plot_kwargs,
 ):
     """
     Plot the mean scores of models across different conditions or folds.
 
-    This function generates a line plot of mean scores, with an option to 
+    This function generates a line plot of mean scores, with an option to
     include a horizontal reference line. It can create a new plot or utilize
     an existing axes object for customization.
 
@@ -480,8 +480,6 @@ def plot_scores(
         )
 
     # plot all rows of mean_scores
-    # TODO: enable errorbar with fill. pass another df with matching indices?
-    # see https://stackoverflow.com/questions/63419636/show-error-bar-in-multi-line-plot-using-matplotlib
 
     mean_scores.apply(
         lambda x: ax.plot(
@@ -498,7 +496,7 @@ def plot_scores(
 
     ax.legend(loc="best")
     ax.set(
-        xticks=np.arange(min(mean_scores.columns), max(mean_scores.columns)+1),
+        xticks=np.arange(min(mean_scores.columns), max(mean_scores.columns) + 1),
     )
 
     return ax
