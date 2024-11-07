@@ -179,16 +179,27 @@ def parse_parameter_from_string(
     string,
     parameter_name,
     chars_to_ignore=1,
+    return_nan=False,
 ):
     """
     Note: rejects `chars_to_ignore` characters after parameter_name match, eg, 1 if there's a symbol there (eg, "max_features_7" --> "7")
     """
     import re
 
-    whole_match = re.search(rf"({parameter_name})(\w\.?)+", string)[0]
+    import numpy as np
 
-    # return everything after "parameter_name"
-    return whole_match[len(parameter_name) + chars_to_ignore :]
+    whole_match = re.search(rf"({parameter_name})(\w\.?)+", string)
+
+    if whole_match is not None:
+        # return everything after "parameter_name"
+        param = whole_match[0][len(parameter_name) + chars_to_ignore :]
+    else:
+        if return_nan:
+            param = np.nan
+        else:
+            raise KeyError(f"Parameter `{parameter_name}` not found in string `{string}`")
+
+    return param
 
 
 def parse_birdname(
