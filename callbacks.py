@@ -10,6 +10,7 @@ ESA_LOOKUP = {"c": "Call", "s": "Stimulus", "n": "Song", "z": "Song"}
 
 def call_mat_stim_trial_loader(
     file,
+    data=None,
     acceptable_call_labels=["Call", "Stimulus"],
     from_notmat=False,
     min_latency=0,
@@ -19,7 +20,7 @@ def call_mat_stim_trial_loader(
     verbose=True,
 ):
     """
-    Given (1) a .mat from DeepSqueak or (2) a .not.mat from evsonganaly, make a trial-by-trial dataframe of callbacks.
+    Given (1) a .mat from DeepSqueak, (2) a .not.mat from evsonganaly, or (3) a dictionary which looks like loaded data from one of these, make a trial-by-trial dataframe of callbacks.
     """
     import numpy as np
     import pandas as pd
@@ -28,7 +29,13 @@ def call_mat_stim_trial_loader(
 
     if verbose:
         print(f"Reading file: {file}")
-    data = read_mat(file)
+
+    if (data is None) == (file is None):  # both or neither provided.
+        raise ValueError("Exactly one of `data` or `file` must be provided.")
+    elif data is not None:
+        pass
+    else:
+        data = read_mat(file)
 
     calls = _read_calls_from_mat(data, from_notmat=from_notmat)
     file_info = _read_file_info_from_mat(data, from_notmat=from_notmat)
@@ -182,6 +189,10 @@ def construct_stim_trial_df(
     )
 
     stim_trials["calls_in_range"] = stim_trials.apply(get_calls, axis=1)
+
+    stim_trials["call_types"] = stim_trials["calls_in_range"].apply(
+        lambda trial: [calls.loc[i, "type"] for i in trial]
+    )
 
     stim_trials["call_times_stim_aligned"] = stim_trials.apply(
         _get_call_times,
