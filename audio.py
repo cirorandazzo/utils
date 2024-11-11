@@ -18,6 +18,11 @@ class AudioObject:
         self.audio = audio
         self.fs = fs
         self.audio_frs = None
+        self.name = None
+
+        self.file = None
+        self.name = None
+        self.channel = None
 
         if b is not None and a is not None:
             self.filtfilt(b, a)
@@ -33,7 +38,8 @@ class AudioObject:
     def from_wav(
         cls,
         filename,
-        channel=0,
+        channels=0,
+        channel_names=None,
         **kwargs,
     ):
         """
@@ -44,17 +50,38 @@ class AudioObject:
         from scipy.io import wavfile
 
         fs, audio = wavfile.read(filename)
-        audio = audio[:, channel]
 
-        new_obj = cls(
-            audio,
-            fs,
-            **kwargs,
-        )
+        if channels == "all":
+            channels = np.arange(audio.shape[1])
+        else:
+            channels = list(channels)
 
-        new_obj.file = filename
+        if channel_names is None:
+            channel_names = [None] * len(channels)
+        else:
+            assert len(channel_names) == len(
+                channels
+            ), f"Loading {len(channels)} channels, but only {len(channel_names)} channel_names given."
 
-        return new_obj
+        objs = []
+
+        for i, c in enumerate(channels):
+            new_obj = cls(
+                audio[:, c],
+                fs,
+                **kwargs,
+            )
+
+            new_obj.file = filename
+            new_obj.name = channel_names[i]
+            new_obj.channel = c
+
+            objs += [new_obj]
+
+        if len(objs) == 1:
+            objs = objs[0]
+
+        return objs
 
     @classmethod
     def from_cbin(
@@ -68,7 +95,7 @@ class AudioObject:
 
         Args should match default constructor.
         """
-        from evfuncs import load_cbin
+        from .evfuncs import load_cbin
 
         audio, fs = load_cbin(filename, channel=channel)
 
@@ -151,6 +178,12 @@ class AudioObject:
         Return an array of sample times; eg, to use when plotting.
         """
         return np.arange(len(self.audio)) / self.fs
+
+    def get_x(self):
+        """
+        Alias for get_sample_times
+        """
+        return self.get_sample_times()
 
     def get_length_s(self):
         """
