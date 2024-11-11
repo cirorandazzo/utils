@@ -178,9 +178,42 @@ def load_cbin(filename, channel=0):
     # .cbin files are big endian, 16 bit signed int, hence dtype=">i2" below
     filename = os.fspath(str(filename))
     data = np.fromfile(filename, dtype=">i2")
-    cbin_removed_path = ".".join(filename.split(".")[0:2])
-    recfile = cbin_removed_path + ".rec"
+    recfile = os.path.splitext(filename)[0] + ".rec"
     rec_dict = readrecf(recfile)
     data = data[channel :: rec_dict["num_channels"]]  # step by number of channels
     sample_freq = rec_dict["sample_freq"]
     return data, sample_freq
+
+
+def segment_notes(smooth, fs, min_int, min_dur, threshold):
+    # % [ons,offs]=evsegment(smooth,Fs,min_int,min_dur,threshold);
+    # % segment takes smoothed filtered song and returns vectors of note
+    # % onsets and offsets values are in seconds
+    #
+    # 2024.11.11 CDR
+
+    import numpy as np
+
+    # threshold input
+    notetimes = np.array(smooth) > threshold
+
+    # get note onsets/offsets
+    trans = np.convolve([1, -1], notetimes, "same")
+    onsets = np.flatnonzero(trans > 0)
+    offsets = np.flatnonzero(trans < 0)
+
+    assert len(onsets) == len(offsets)
+
+    # merge any calls closer than min_int ms
+    temp_int = offsets[:-1] - onsets[1:] * 1000 / fs
+    real_ints = temp_int > min_int
+    onsets = onsets[np.insert(real_ints, 0, 1)]  # save first onset
+    offsets = offsets[np.insert(real_ints, -1, 1)]  # save final offset
+
+    # delete short calls (less than min_dur ms)
+    temp_dur = (offsets - onsets) * 1000 / fs
+    real_durs = temp_dur > min_dur
+    onsets = onsets[real_durs]
+    offsets = offsets[real_durs]
+
+    return onsets / fs, offsets / fs
