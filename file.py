@@ -1,6 +1,5 @@
 # file.py
 #
-#
 
 
 def multi_index_from_dict(df, index_dict, keep_current_index=True):
@@ -197,7 +196,9 @@ def parse_parameter_from_string(
         if return_nan:
             param = np.nan
         else:
-            raise KeyError(f"Parameter `{parameter_name}` not found in string `{string}`")
+            raise KeyError(
+                f"Parameter `{parameter_name}` not found in string `{string}`"
+            )
 
     return param
 

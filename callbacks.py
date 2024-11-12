@@ -2,7 +2,7 @@
 # 2024.05.13 CDR
 #
 # Functions related to loading & preprocessing callback data
-# 
+#
 # Renamed callbacks.py from deepsqueak.py
 
 ESA_LOOKUP = {"c": "Call", "s": "Stimulus", "n": "Song", "z": "Song"}
@@ -10,6 +10,7 @@ ESA_LOOKUP = {"c": "Call", "s": "Stimulus", "n": "Song", "z": "Song"}
 
 def call_mat_stim_trial_loader(
     file,
+    data=None,
     acceptable_call_labels=["Call", "Stimulus"],
     from_notmat=False,
     min_latency=0,
@@ -19,7 +20,7 @@ def call_mat_stim_trial_loader(
     verbose=True,
 ):
     """
-    Given (1) a .mat from DeepSqueak or (2) a .not.mat from evsonganaly, make a trial-by-trial dataframe of callbacks.
+    Given (1) a .mat from DeepSqueak, (2) a .not.mat from evsonganaly, or (3) a dictionary which looks like loaded data from one of these, make a trial-by-trial dataframe of callbacks.
     """
     import numpy as np
     import pandas as pd
@@ -28,10 +29,18 @@ def call_mat_stim_trial_loader(
 
     if verbose:
         print(f"Reading file: {file}")
-    data = read_mat(file)
+
+    if (data is None) == (file is None):  # both or neither provided.
+        raise ValueError("Exactly one of `data` or `file` must be provided.")
+    elif data is not None:
+        pass
+    else:
+        data = read_mat(file)
 
     calls = _read_calls_from_mat(data, from_notmat=from_notmat)
     file_info = _read_file_info_from_mat(data, from_notmat=from_notmat)
+
+    calls.index.name = calls_index_name
 
     del data  # don't store twice, it's already saved elsewhere
 
@@ -42,22 +51,35 @@ def call_mat_stim_trial_loader(
     stim_trials = construct_stim_trial_df(
         calls,
         audio_duration=file_info["wav_duration_s"],
-        stim_type_label=stim_type_label
+        stim_type_label=stim_type_label,
+        min_latency=min_latency,
         calls_index_name=calls_index_name,
         stims_index_name=stims_index_name,
     )
+
+    if stim_trials is None:
+        return None
+
+    stim_trials["wav_filename"] = file_info["wav_filename"]
 
     # reject rows of stim_trials with bad call types
     if verbose:
         print(f"Rejecting call types not in: {acceptable_call_labels}")
 
+    assert (
+        stim_type_label in acceptable_call_labels
+    ), f"Warning! Using label `{stim_type_label}` used to align trials but not listed as an acceptable call type."
+
     stim_trials, rejected_trials, call_types = reject_stim_trials(
         stim_trials,
         calls,
-        acceptable_call_labels += stim_type_label,  # you can't just reject stimuli...
+        acceptable_call_labels,  # you can't just reject stimuli...
     )
 
     if verbose:
+        print(f"\t- # trials rejected: {len(rejected_trials)}")
+        print(f"\t- # trials accepted: {len(stim_trials)}")
+        print("")
         print(call_types)
 
     return calls, stim_trials, rejected_trials, file_info, call_types
@@ -65,11 +87,15 @@ def call_mat_stim_trial_loader(
 
 def _read_calls_from_mat(
     data,
-    from_notmat=from_notmat,
-) -> pd.DataFrame:
+    from_notmat,
+):
     """
     Reads calls from a .mat containing callback labels (either deepsqueak or evsonganaly .not.mat)
     """
+
+    import numpy as np
+    import pandas as pd
+
     if from_notmat:
         calls = pd.DataFrame()
         calls["start_s"] = data["onsets"] / 1000
@@ -91,18 +117,19 @@ def _read_calls_from_mat(
     ii = (calls["type_prev_call"] == "Call") & (calls["type"] == "Call")
 
     calls["ici"] = calls.loc[ii]["time_from_prev_onset_s"]
-    calls.index.name = calls_index_name
 
     return calls
 
 
 def _read_file_info_from_mat(
     data,
-    from_notmat=from_notmat,
+    from_notmat,
 ) -> dict:
     """
     Reads file metadata from a .mat containing callback labels (either deepsqueak or evsonganaly .not.mat)
     """
+    import numpy as np
+    import pandas as pd
 
     if from_notmat:
         # TODO: deal with file info
@@ -125,6 +152,7 @@ def construct_stim_trial_df(
     calls,
     audio_duration,
     stim_type_label,
+    min_latency,
     calls_index_name="calls_index",
     stims_index_name="stims_index",
 ):
@@ -134,9 +162,16 @@ def construct_stim_trial_df(
     import pandas as pd
     import numpy as np
 
-    stims = calls[calls["type"] == stim_label]
+    stims = calls[calls["type"] == stim_type_label]
 
     stim_trials = pd.DataFrame()
+
+    if len(stims) == 0:
+        import warnings
+
+        warnings.warn("No stimuli found in this file!")
+
+        return None
 
     # trial start: stimulus onset
     stim_trials["trial_start_s"] = stims["start_s"]
@@ -154,6 +189,10 @@ def construct_stim_trial_df(
     )
 
     stim_trials["calls_in_range"] = stim_trials.apply(get_calls, axis=1)
+
+    stim_trials["call_types"] = stim_trials["calls_in_range"].apply(
+        lambda trial: [calls.loc[i, "type"] for i in trial]
+    )
 
     stim_trials["call_times_stim_aligned"] = stim_trials.apply(
         _get_call_times,
@@ -177,11 +216,9 @@ def construct_stim_trial_df(
         np.min(trial) if len(trial) > 0 else np.nan for trial in onsets
     ]
 
-    stim_trials["wav_filename"] = file_info["wav_filename"]
     # stim_trials['latency_s'] = [np.min(calls[:,0]) if len(calls)>0 else np.nan for calls in stim_trials['call_times_stim_aligned']]
 
     # NOTE: does not just count call indices in `calls_in_range`, which can include calls that have onset before stimulus.
-
 
     # reindex stim trials by stim # in block, but store call # for each stim
     stim_trials[calls_index_name] = stim_trials.index
@@ -252,6 +289,9 @@ def reject_stim_trials(
     """
     Given stim-aligned dataframe, exclude all trials with call types other than those in acceptable_call_labels)
     """
+    import numpy as np
+    import pandas as pd
+
     call_types = stim_trials["calls_in_range"].apply(
         lambda x: calls["type"].loc[x].value_counts()
     )  # get call types
@@ -266,10 +306,4 @@ def reject_stim_trials(
     rejected_trials = stim_trials[to_reject]
     stim_trials = stim_trials[~to_reject]
 
-    if verbose:
-        print(f"\t- # trials rejected: {len(rejected_trials)}")
-        print(f"\t- # trials accepted: {len(stim_trials)}")
-
     return stim_trials, rejected_trials, call_types
-
-
