@@ -47,6 +47,7 @@ class AudioObject:
 
         Args should match default constructor.
         """
+        import numpy as np
         from scipy.io import wavfile
 
         fs, audio = wavfile.read(filename)
@@ -54,7 +55,7 @@ class AudioObject:
         if channels == "all":
             channels = np.arange(audio.shape[1])
         else:
-            channels = list(channels)
+            channels = np.array([channels]).flatten()
 
         if channel_names is None:
             channel_names = [None] * len(channels)
