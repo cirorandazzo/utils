@@ -84,6 +84,20 @@ def call_mat_stim_trial_loader(
 
     return calls, stim_trials, rejected_trials, file_info, call_types
 
+def make_calls_df_from_notmat(
+    file,
+):
+    """
+    Wrapper function for accessibility. Read calls from an evsonganaly .not.mat file into calls_df structure.
+
+    Useful if you don't want to do more callback pipeline steps (eg, in the case of spontaneous recordings.)
+    """
+    
+    from pymatreader import read_mat
+
+    data = read_mat(file)
+
+    return _read_calls_from_mat(data, from_notmat=True)
 
 def _read_calls_from_mat(
     data,
