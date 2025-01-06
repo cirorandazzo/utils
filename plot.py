@@ -1,26 +1,30 @@
 # ./utils/plot.py
 # 2024.05.14 CDR
-# 
+#
 # Plotting functions
 
 callback_raster_stim_kwargs = dict(color="red", alpha=0.5)
 callback_raster_call_kwargs = dict(color="black", alpha=0.5)
+callback_raster_song_kwargs = dict(color="blue", alpha=0.5)
+callback_raster_default_kwargs = dict(color="green", alpha=0.5)
+
 day_colors = {1: "#a2cffe", 2: "#840000"}
 
 
 def plot_callback_raster(
     data,
     ax=None,
-    title=None,
-    xlabel="Time since stimulus onset (s)",
-    ylabel="Trial #",
     plot_stim_blocks=True,
     show_legend=True,
     y_offset=0,
-    call_kwargs=callback_raster_call_kwargs,
-    stim_kwargs=callback_raster_stim_kwargs,
+    call_types_to_plot="all",
+    call_type_plot_kwargs={
+        "Stimulus": callback_raster_stim_kwargs,
+        "Call": callback_raster_call_kwargs,
+        "Song": callback_raster_song_kwargs
+    },
+    default_plot_kwargs=callback_raster_default_kwargs,
     force_yticks_int=True,
-    kwargs={},
 ):
     import matplotlib.pyplot as plt
     from matplotlib.collections import PatchCollection
@@ -30,39 +34,45 @@ def plot_callback_raster(
         fig = plt.figure()
         ax = fig.subplots()
 
-    # Construct patch collections for call boxes
-    stim_boxes = []
-    call_boxes = []
+    # Construct patch collections for call boxes. Separate by call type.
+    boxes = {k: [] for k in call_types_to_plot}
+    boxes["Stimulus"] = [] # ensure stimulus is present; may be removed later
 
     for i, trial_i in enumerate(data.index):
         height = i + y_offset
 
-        stim_boxes.append(
+        boxes["Stimulus"].append(
             Rectangle((0, height), data.loc[trial_i, "stim_duration_s"], 1)
         )
 
-        calls = data.loc[trial_i, "call_times_stim_aligned"]
-        call_boxes += [Rectangle((st, height), en - st, 1) for st, en in calls]
+        call_types = data.loc[trial_i, "call_types"]
+        call_times = data.loc[trial_i, "call_times_stim_aligned"]
 
-    call_patches = PatchCollection(call_boxes, **call_kwargs)
-    ax.add_collection(call_patches)
+        for type, time in zip(call_types, call_times):
+            st, en = time
 
-    call_faker = Rectangle([0, 0], 0, 0, **call_kwargs)
-    legend_labels = ["Calls"]
-    legend_entries = [call_faker]
+            # dealing with "all" keyword
+            if call_types_to_plot=="all" and type not in boxes.keys():
+                boxes[type] = []
 
-    # "fakers" are proxy artists, only created for legend
-    if plot_stim_blocks:
-        stim_patches = PatchCollection(stim_boxes, **stim_kwargs)
-        ax.add_collection(stim_patches)
+            if type in boxes.keys():
+                boxes[type].append(Rectangle((st, height), en - st, 1))
 
-        # add stimulus to legend
-        stim_faker = Rectangle([0, 0], 0, 0, **stim_kwargs)
-        legend_labels.append("Stimulus")
-        legend_entries.append(stim_faker)
+    if not plot_stim_blocks:
+        del boxes['Stimulus']
+
+    legend = {}
+
+    for type, type_boxes in boxes.items():
+        style = call_type_plot_kwargs.get(type, default_plot_kwargs)
+        call_patches = PatchCollection(type_boxes, **style)
+        ax.add_collection(call_patches)
+
+        # construct proxy artists for legend
+        legend[type] = Rectangle([0, 0], 0, 0, **style)
 
     if show_legend:
-        ax.legend(legend_entries, legend_labels)
+        ax.legend(legend.values(), legend.keys())
 
     ax.autoscale_view()
 
@@ -72,10 +82,8 @@ def plot_callback_raster(
         ax.yaxis.set_major_locator(MaxNLocator(integer=True))
 
     ax.set(
-        title=title,
-        xlabel=xlabel,
-        ylabel=ylabel,
-        **kwargs,
+        xlabel="Time since stimulus onset (s)",
+        ylabel="Trial #",
     )
 
     return ax
