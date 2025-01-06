@@ -18,69 +18,104 @@ def plot_callback_raster(
     show_legend=True,
     y_offset=0,
     call_types_to_plot="all",
-    call_type_plot_kwargs={
-        "Stimulus": callback_raster_stim_kwargs,
-        "Call": callback_raster_call_kwargs,
-        "Song": callback_raster_song_kwargs
-    },
-    default_plot_kwargs=callback_raster_default_kwargs,
+    call_type_plot_kwargs=None,
+    default_plot_kwargs=None,
     force_yticks_int=True,
 ):
+    """
+    Plots a raster plot of callback responses for stimulus-aligned data.
+
+    Parameters:
+    - data: pandas DataFrame containing callback data. Each row should correspond to a single stimulus trial and provide columns: 'stim_duration_s', 'call_types', 'call_times_stim_aligned'.
+    - ax: matplotlib Axes object (optional). If None, a new figure and axes will be created.
+    - plot_stim_blocks: bool, whether to plot stimulus blocks (default: True).
+    - show_legend: bool, whether to display the legend. (default: True).
+    - y_offset: float, vertical offset for positioning calls along the y-axis. Mostly useful when plotting multiple rasters stacked on the same Axes - eg, see `plot_callback_raster_multiblock` (default: 0).
+    - call_types_to_plot: list or "all", specifies which call types to include (default: "all").
+    - call_type_plot_kwargs: dict, contains plot style parameters for each call type (default: None).
+    - default_plot_kwargs: dict, default plot style parameters (default: None).
+    - force_yticks_int: bool, whether to force integer tick marks on the y-axis (default: True).
+
+    Returns:
+    - ax: matplotlib Axes object with the plotted raster.
+    """
     import matplotlib.pyplot as plt
     from matplotlib.collections import PatchCollection
     from matplotlib.patches import Rectangle
 
+    # Use default plotting kwargs if not provided
+    if call_type_plot_kwargs is None:
+        call_type_plot_kwargs = {
+            "Stimulus": callback_raster_stim_kwargs,
+            "Call": callback_raster_call_kwargs,
+            "Song": callback_raster_song_kwargs,
+        }
+
+    if default_plot_kwargs is None:
+        default_plot_kwargs = callback_raster_default_kwargs
+
+    # Create figure and axes if not provided
     if ax is None:
-        fig = plt.figure()
-        ax = fig.subplots()
+        fig, ax = plt.subplots()
 
-    # Construct patch collections for call boxes. Separate by call type.
-    boxes = {k: [] for k in call_types_to_plot}
-    boxes["Stimulus"] = [] # ensure stimulus is present; may be removed later
+    # Initialize boxes dictionary with call types to plot
+    if call_types_to_plot != "all":
+        boxes = {call_type: [] for call_type in call_types_to_plot}
+    else:
+        boxes = {}
 
+    boxes["Stimulus"] = []  # stimulus will be deleted later if not plotting.
+
+    # Iterate through trials and create rectangles for each call and stimulus
     for i, trial_i in enumerate(data.index):
         height = i + y_offset
 
-        boxes["Stimulus"].append(
-            Rectangle((0, height), data.loc[trial_i, "stim_duration_s"], 1)
-        )
+        # Create rectangle for stimulus block
+        stim_duration = data.loc[trial_i, "stim_duration_s"]
+        boxes["Stimulus"].append(Rectangle((0, height), stim_duration, 1))
 
         call_types = data.loc[trial_i, "call_types"]
         call_times = data.loc[trial_i, "call_times_stim_aligned"]
 
-        for type, time in zip(call_types, call_times):
-            st, en = time
+        # Add rectangles for each call
+        for call_type, (st, en) in zip(call_types, call_times):
 
-            # dealing with "all" keyword
-            if call_types_to_plot=="all" and type not in boxes.keys():
-                boxes[type] = []
+            # add type to boxes dict if necessary
+            if call_types_to_plot == "all" and call_type not in boxes:
+                boxes[call_type] = []
 
-            if type in boxes.keys():
-                boxes[type].append(Rectangle((st, height), en - st, 1))
+            # add box for this call
+            if call_type in boxes:
+                boxes[call_type].append(Rectangle((st, height), en - st, 1))
 
+    # Optionally remove stimulus blocks
     if not plot_stim_blocks:
-        del boxes['Stimulus']
+        boxes.pop("Stimulus", None)
 
-    legend = {}
-
-    for type, type_boxes in boxes.items():
-        style = call_type_plot_kwargs.get(type, default_plot_kwargs)
+    # Plot PatchCollection objects & create legend proxies
+    legend_proxies = {}
+    for call_type, type_boxes in boxes.items():
+        style = call_type_plot_kwargs.get(call_type, default_plot_kwargs)
         call_patches = PatchCollection(type_boxes, **style)
         ax.add_collection(call_patches)
 
-        # construct proxy artists for legend
-        legend[type] = Rectangle([0, 0], 0, 0, **style)
+        # Create proxy artists for the legend
+        legend_proxies[call_type] = Rectangle([0, 0], 0, 0, **style)
 
+    # Add legend if enabled
     if show_legend:
-        ax.legend(legend.values(), legend.keys())
+        ax.legend(legend_proxies.values(), legend_proxies.keys())
 
+    # Adjust view (not automatic with add_collection)
     ax.autoscale_view()
 
+    # Force integer tick marks on y-axis if requested
     if force_yticks_int:
         from matplotlib.ticker import MaxNLocator
 
         ax.yaxis.set_major_locator(MaxNLocator(integer=True))
 
+    # Set labels
     ax.set(
         xlabel="Time since stimulus onset (s)",
         ylabel="Trial #",
