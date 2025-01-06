@@ -5,6 +5,8 @@
 #
 
 import matplotlib.pyplot as plt
+from matplotlib.collections import PatchCollection
+from matplotlib.patches import Rectangle
 
 callback_raster_stim_kwargs = dict(color="red", alpha=0.5)
 callback_raster_call_kwargs = dict(color="black", alpha=0.5)
@@ -42,9 +44,6 @@ def plot_callback_raster(
     Returns:
     - ax: matplotlib Axes object with the plotted raster.
     """
-    import matplotlib.pyplot as plt
-    from matplotlib.collections import PatchCollection
-    from matplotlib.patches import Rectangle
 
     # Use default plotting kwargs if not provided
     if call_type_plot_kwargs is None:
@@ -215,16 +214,18 @@ def plot_callback_raster_multiblock(
         # Set default horizontal line arguments if none are provided
         if hline_kwargs is None:
             hline_kwargs = dict(
-                y=block_locs,
-                xmin=hline_xlim[0],
-                xmax=hline_xlim[1],
                 colors="k",
                 linestyles="solid",
                 linewidths=0.5,
             )
 
         # Draw the horizontal lines on the plot
-        ax.hlines(**hline_kwargs)
+        ax.hlines(
+            y=block_locs,
+            xmin=hline_xlim[0],
+            xmax=hline_xlim[1],
+            **hline_kwargs,
+        )
 
     # Add a secondary y-axis for block labels if requested
     if show_block_axis:
@@ -233,6 +234,84 @@ def plot_callback_raster_multiblock(
             ylabel="Block",  # Label for the secondary y-axis
             yticks=block_locs,  # Set the y-ticks to match block locations
             yticklabels=blocks,  # Label blocks according to their identifiers
+        )
+
+    # Automatically adjust the view to fit the data
+    ax.autoscale_view()
+
+    # Set xlim for the entire plot (also affects horizontal lines)
+    ax.set(xlim=hline_xlim)
+
+    return ax
+
+
+def plot_callback_raster_multiday(
+    data,
+    ax=None,
+    hline_xlim=[0.1, 3],
+    hline_day_kwargs=None,
+    hline_block_kwargs=None,
+    show_day_axis=True,
+    y_offset_initial=0,
+    **raster_plot_kwargs,
+):
+    # Create a new figure and axis if none are provided
+    if ax is None:
+        fig, ax = plt.subplots()
+
+    if hline_day_kwargs is None:
+        hline_day_kwargs = dict(
+            colors="k",
+            linestyles="solid",
+            linewidths=2,
+        )
+
+    if hline_block_kwargs is None:
+        hline_block_kwargs = dict(
+            colors="k",
+            linestyles="dashed",
+            linewidths=0.5,
+        )
+
+    # Extract and order blocks
+    days = list(set(data.index.get_level_values(0)))  # Get unique blocks
+    days.sort()
+
+    # Initialize vertical offset for plotting
+    y_offset = y_offset_initial
+    day_locs = []  # List to store y-locations for each block
+
+    for day in days:
+        day_locs.append(y_offset)  # Store y-position of the current block
+        data_day = data.xs(day)  # Get data for the current block
+
+        # Plot multi-block raster for this day
+        plot_callback_raster_multiblock(
+            data_day,
+            ax=ax,
+            y_offset_initial=y_offset,
+            hline_kwargs=hline_block_kwargs,
+            show_block_axis=False,
+            **raster_plot_kwargs,  # Pass additional plotting arguments
+        )
+
+        # Increment the y_offset for the next block
+        y_offset += len(data_day)
+
+    # Draw the horizontal lines on the plot
+    ax.hlines(
+        y=day_locs,
+        xmin=hline_xlim[0],
+        xmax=hline_xlim[1],
+        **hline_day_kwargs,
+    )
+
+    if show_day_axis:
+        day_axis = ax.secondary_yaxis(location="right")  # Create secondary y-axis
+        day_axis.set(
+            ylabel="Day",  # Label for the secondary y-axis
+            yticks=day_locs,  # Set the y-ticks to match block locations
+            yticklabels=days,  # Label blocks according to their identifiers
         )
 
     # Automatically adjust the view to fit the data
