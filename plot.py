@@ -2,6 +2,9 @@
 # 2024.05.14 CDR
 #
 # Plotting functions
+#
+
+import matplotlib.pyplot as plt
 
 callback_raster_stim_kwargs = dict(color="red", alpha=0.5)
 callback_raster_call_kwargs = dict(color="black", alpha=0.5)
@@ -128,64 +131,115 @@ def plot_callback_raster_multiblock(
     data,
     ax=None,
     plot_hlines=True,
+    hline_xlim=[-0.1, 3],
+    hline_kwargs=None,
     show_block_axis=True,
-    show_legend=False,
-    xlim=[-0.1, 3],
-    call_kwargs=callback_raster_call_kwargs,
-    stim_kwargs=callback_raster_stim_kwargs,
-    title=None,
+    y_offset_initial=0,
+    **raster_plot_kwargs,
 ):
     """
-    Plot multiple blocks on the same axis with horizontal lines separating.
+    Plot rasters for multiple callback blocks on the same axis, separated by horizontal lines.
 
-    Notes: xlim sets ax.xlim, but also xmin and xmax for horizontal block lines.
+    This function takes a DataFrame with data indexed by blocks and plots callback raster plots for
+    each block, separating them with horizontal lines. Optionally, a secondary y-axis can be added
+    to show block labels.
+
+    Parameters:
+    - data: pandas DataFrame.
+      A DataFrame indexed by blocks, where each block contains data for trials or calls to be plotted. Each block is assumed to have its own trial data.
+    - ax: matplotlib Axes object (optional) (default: None).
+      The Axes to plot on. If None, a new figure and axes will be created.
+    - plot_hlines: bool, optional (default: True).
+      If True, horizontal lines will be drawn to separate the blocks.
+    - hline_xlim: list, optional (default: [-0.1, 3]).
+      The x-axis limits for the horizontal lines that separate the blocks. This will also set the
+      `xlim` for the entire plot.
+    - hline_kwargs: dict, optional (default: None).
+      Additional keyword arguments to customize the appearance of the horizontal lines (e.g., color,
+      line style). If None, default line properties will be used.
+    - show_block_axis: bool, optional (default: True).
+      If True, a secondary y-axis will be added on the right side of the plot to label the blocks.
+    - y_offset_initial: int, optional (default: 0).
+      The initial vertical offset for plotting the first block. Subsequent blocks will be positioned
+      below this offset.
+    - **raster_plot_kwargs: additional keyword arguments.
+      These are passed directly to the `plot_callback_raster` function for customizing the plot
+      of individual callback rasters (e.g., plot colors, markers, etc.).
+
+    Returns:
+    - ax: matplotlib Axes object.
+      The Axes object with the plot. The plot includes multiple callback raster blocks,
+      optional horizontal lines, and a secondary y-axis for block labels if enabled.
+
+    Notes:
+    - `xlim` sets both `ax.xlim` and the `xmin`, `xmax` for the horizontal block lines.
+    - The plot automatically adjusts to the data provided, scaling the view as needed.
+
+    Example:
+    ```python
+    ax = plot_callback_raster_multiblock(data, plot_hlines=True, show_block_axis=True)
+    ```
+
     """
 
-    blocks = list(set(data.index.get_level_values(0)))  # get & order blocks
+    # Create a new figure and axis if none are provided
+    if ax is None:
+        fig, ax = plt.subplots()
+
+    # Extract and order blocks
+    blocks = list(set(data.index.get_level_values(0)))  # Get unique blocks
     blocks.sort()
 
-    y_offset = 0
-    block_locs = []
+    # Initialize vertical offset for plotting
+    y_offset = y_offset_initial
+    block_locs = []  # List to store y-locations for each block
 
+    # Plot data for each block
     for block in blocks:
-        block_locs.append(y_offset)
-        data_block = data.loc[block]
+        block_locs.append(y_offset)  # Store y-position of the current block
+        data_block = data.loc[block]  # Get data for the current block
 
+        # Plot raster for this block using the `plot_callback_raster` function
         plot_callback_raster(
             data_block,
             ax=ax,
             y_offset=y_offset,
-            plot_stim_blocks=True,
-            show_legend=show_legend,
-            call_kwargs=call_kwargs,
-            stim_kwargs=stim_kwargs,
+            **raster_plot_kwargs,  # Pass additional plotting arguments
         )
 
+        # Increment the y_offset for the next block
         y_offset += len(data_block)
 
+    # Plot horizontal lines to separate blocks if requested
     if plot_hlines:
-        ax.hlines(
-            y=block_locs,
-            xmin=xlim[0],
-            xmax=xlim[1],
-            colors="k",
-            linestyles="solid",
-            linewidths=0.5,
-        )
+        # Set default horizontal line arguments if none are provided
+        if hline_kwargs is None:
+            hline_kwargs = dict(
+                y=block_locs,
+                xmin=hline_xlim[0],
+                xmax=hline_xlim[1],
+                colors="k",
+                linestyles="solid",
+                linewidths=0.5,
+            )
 
+        # Draw the horizontal lines on the plot
+        ax.hlines(**hline_kwargs)
+
+    # Add a secondary y-axis for block labels if requested
     if show_block_axis:
-        block_axis = ax.secondary_yaxis(location="right")
+        block_axis = ax.secondary_yaxis(location="right")  # Create secondary y-axis
         block_axis.set(
-            ylabel="Block",
-            yticks=block_locs,
-            yticklabels=blocks,
+            ylabel="Block",  # Label for the secondary y-axis
+            yticks=block_locs,  # Set the y-ticks to match block locations
+            yticklabels=blocks,  # Label blocks according to their identifiers
         )
 
-    ax.set(
-        title=title,
-        xlim=xlim,
-        ylim=[0, len(data)],
-    )
+    # Automatically adjust the view to fit the data
+    ax.autoscale_view()
+
+    # Set xlim for the entire plot (also affects horizontal lines)
+    ax.set(xlim=hline_xlim)
 
     return ax
 
