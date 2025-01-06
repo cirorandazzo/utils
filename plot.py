@@ -1,81 +1,126 @@
 # ./utils/plot.py
 # 2024.05.14 CDR
-# 
+#
 # Plotting functions
+#
+
+import matplotlib.pyplot as plt
+from matplotlib.collections import PatchCollection
+from matplotlib.patches import Rectangle
 
 callback_raster_stim_kwargs = dict(color="red", alpha=0.5)
 callback_raster_call_kwargs = dict(color="black", alpha=0.5)
+callback_raster_song_kwargs = dict(color="blue", alpha=0.5)
+callback_raster_default_kwargs = dict(color="green", alpha=0.5)
+
 day_colors = {1: "#a2cffe", 2: "#840000"}
 
 
 def plot_callback_raster(
     data,
     ax=None,
-    title=None,
-    xlabel="Time since stimulus onset (s)",
-    ylabel="Trial #",
     plot_stim_blocks=True,
     show_legend=True,
     y_offset=0,
-    call_kwargs=callback_raster_call_kwargs,
-    stim_kwargs=callback_raster_stim_kwargs,
+    call_types_to_plot="all",
+    call_type_plot_kwargs=None,
+    default_plot_kwargs=None,
     force_yticks_int=True,
-    kwargs={},
 ):
-    import matplotlib.pyplot as plt
-    from matplotlib.collections import PatchCollection
-    from matplotlib.patches import Rectangle
+    """
+    Plots a raster plot of callback responses for stimulus-aligned data.
 
+    Parameters:
+    - data: pandas DataFrame containing callback data. Each row should correspond to a single stimulus trial and provide columns: 'stim_duration_s', 'call_types', 'call_times_stim_aligned'.
+    - ax: matplotlib Axes object (optional). If None, a new figure and axes will be created.
+    - plot_stim_blocks: bool, whether to plot stimulus blocks (default: True).
+    - show_legend: bool, whether to display the legend. (default: True).
+    - y_offset: float, vertical offset for positioning calls along the y-axis. Mostly useful when plotting multiple rasters stacked on the same Axes - eg, see `plot_callback_raster_multiblock` (default: 0).
+    - call_types_to_plot: list or "all", specifies which call types to include (default: "all").
+    - call_type_plot_kwargs: dict, contains plot style parameters for each call type (default: None).
+    - default_plot_kwargs: dict, default plot style parameters (default: None).
+    - force_yticks_int: bool, whether to force integer tick marks on the y-axis (default: True).
+
+    Returns:
+    - ax: matplotlib Axes object with the plotted raster.
+    """
+
+    # Use default plotting kwargs if not provided
+    if call_type_plot_kwargs is None:
+        call_type_plot_kwargs = {
+            "Stimulus": callback_raster_stim_kwargs,
+            "Call": callback_raster_call_kwargs,
+            "Song": callback_raster_song_kwargs,
+        }
+
+    if default_plot_kwargs is None:
+        default_plot_kwargs = callback_raster_default_kwargs
+
+    # Create figure and axes if not provided
     if ax is None:
-        fig = plt.figure()
-        ax = fig.subplots()
+        fig, ax = plt.subplots()
 
-    # Construct patch collections for call boxes
-    stim_boxes = []
-    call_boxes = []
+    # Initialize boxes dictionary with call types to plot
+    if call_types_to_plot != "all":
+        boxes = {call_type: [] for call_type in call_types_to_plot}
+    else:
+        boxes = {}
 
+    boxes["Stimulus"] = []  # stimulus will be deleted later if not plotting.
+
+    # Iterate through trials and create rectangles for each call and stimulus
     for i, trial_i in enumerate(data.index):
         height = i + y_offset
 
-        stim_boxes.append(
-            Rectangle((0, height), data.loc[trial_i, "stim_duration_s"], 1)
-        )
+        # Create rectangle for stimulus block
+        stim_duration = data.loc[trial_i, "stim_duration_s"]
+        boxes["Stimulus"].append(Rectangle((0, height), stim_duration, 1))
 
-        calls = data.loc[trial_i, "call_times_stim_aligned"]
-        call_boxes += [Rectangle((st, height), en - st, 1) for st, en in calls]
+        call_types = data.loc[trial_i, "call_types"]
+        call_times = data.loc[trial_i, "call_times_stim_aligned"]
 
-    call_patches = PatchCollection(call_boxes, **call_kwargs)
-    ax.add_collection(call_patches)
+        # Add rectangles for each call
+        for call_type, (st, en) in zip(call_types, call_times):
 
-    call_faker = Rectangle([0, 0], 0, 0, **call_kwargs)
-    legend_labels = ["Calls"]
-    legend_entries = [call_faker]
+            # add type to boxes dict if necessary
+            if call_types_to_plot == "all" and call_type not in boxes:
+                boxes[call_type] = []
 
-    # "fakers" are proxy artists, only created for legend
-    if plot_stim_blocks:
-        stim_patches = PatchCollection(stim_boxes, **stim_kwargs)
-        ax.add_collection(stim_patches)
+            # add box for this call
+            if call_type in boxes:
+                boxes[call_type].append(Rectangle((st, height), en - st, 1))
 
-        # add stimulus to legend
-        stim_faker = Rectangle([0, 0], 0, 0, **stim_kwargs)
-        legend_labels.append("Stimulus")
-        legend_entries.append(stim_faker)
+    # Optionally remove stimulus blocks
+    if not plot_stim_blocks:
+        boxes.pop("Stimulus", None)
 
+    # Plot PatchCollection objects & create legend proxies
+    legend_proxies = {}
+    for call_type, type_boxes in boxes.items():
+        style = call_type_plot_kwargs.get(call_type, default_plot_kwargs)
+        call_patches = PatchCollection(type_boxes, **style)
+        ax.add_collection(call_patches)
+
+        # Create proxy artists for the legend
+        legend_proxies[call_type] = Rectangle([0, 0], 0, 0, **style)
+
+    # Add legend if enabled
     if show_legend:
-        ax.legend(legend_entries, legend_labels)
+        ax.legend(legend_proxies.values(), legend_proxies.keys())
 
+    # Adjust view (not automatic with add_collection)
     ax.autoscale_view()
 
+    # Force integer tick marks on y-axis if requested
     if force_yticks_int:
         from matplotlib.ticker import MaxNLocator
 
         ax.yaxis.set_major_locator(MaxNLocator(integer=True))
 
+    # Set labels
     ax.set(
-        title=title,
-        xlabel=xlabel,
-        ylabel=ylabel,
-        **kwargs,
+        xlabel="Time since stimulus onset (s)",
+        ylabel="Trial #",
     )
 
     return ax
@@ -85,64 +130,253 @@ def plot_callback_raster_multiblock(
     data,
     ax=None,
     plot_hlines=True,
+    hline_xlim=[-0.1, 3],
+    hline_kwargs=None,
     show_block_axis=True,
-    show_legend=False,
-    xlim=[-0.1, 3],
-    call_kwargs=callback_raster_call_kwargs,
-    stim_kwargs=callback_raster_stim_kwargs,
-    title=None,
+    y_offset_initial=0,
+    **raster_plot_kwargs,
 ):
     """
-    Plot multiple blocks on the same axis with horizontal lines separating.
+    Plot rasters for multiple callback blocks on the same axis, separated by horizontal lines.
 
-    Notes: xlim sets ax.xlim, but also xmin and xmax for horizontal block lines.
+    This function takes a DataFrame with data indexed by blocks and plots callback raster plots for
+    each block, separating them with horizontal lines. Optionally, a secondary y-axis can be added
+    to show block labels.
+
+    Parameters:
+    - data: pandas DataFrame.
+      A DataFrame indexed by blocks, where each block contains data for trials or calls to be plotted. Each block is assumed to have its own trial data.
+    - ax: matplotlib Axes object (optional) (default: None).
+      The Axes to plot on. If None, a new figure and axes will be created.
+    - plot_hlines: bool, optional (default: True).
+      If True, horizontal lines will be drawn to separate the blocks.
+    - hline_xlim: list, optional (default: [-0.1, 3]).
+      The x-axis limits for the horizontal lines that separate the blocks. This will also set the
+      `xlim` for the entire plot.
+    - hline_kwargs: dict, optional (default: None).
+      Additional keyword arguments to customize the appearance of the horizontal lines (e.g., color,
+      line style). If None, default line properties will be used.
+    - show_block_axis: bool, optional (default: True).
+      If True, a secondary y-axis will be added on the right side of the plot to label the blocks.
+    - y_offset_initial: int, optional (default: 0).
+      The initial vertical offset for plotting the first block. Subsequent blocks will be positioned
+      below this offset.
+    - **raster_plot_kwargs: additional keyword arguments.
+      These are passed directly to the `plot_callback_raster` function for customizing the plot
+      of individual callback rasters (e.g., plot colors, markers, etc.).
+
+    Returns:
+    - ax: matplotlib Axes object.
+      The Axes object with the plot. The plot includes multiple callback raster blocks,
+      optional horizontal lines, and a secondary y-axis for block labels if enabled.
+
+    Notes:
+    - `xlim` sets both `ax.xlim` and the `xmin`, `xmax` for the horizontal block lines.
+    - The plot automatically adjusts to the data provided, scaling the view as needed.
+
+    Example:
+    ```python
+    ax = plot_callback_raster_multiblock(data, plot_hlines=True, show_block_axis=True)
+    ```
+
     """
 
-    blocks = list(set(data.index.get_level_values(0)))  # get & order blocks
+    # Create a new figure and axis if none are provided
+    if ax is None:
+        fig, ax = plt.subplots()
+
+    # Extract and order blocks
+    blocks = list(set(data.index.get_level_values(0)))  # Get unique blocks
     blocks.sort()
 
-    y_offset = 0
-    block_locs = []
+    # Initialize vertical offset for plotting
+    y_offset = y_offset_initial
+    block_locs = []  # List to store y-locations for each block
 
+    # Plot data for each block
     for block in blocks:
-        block_locs.append(y_offset)
-        data_block = data.loc[block]
+        block_locs.append(y_offset)  # Store y-position of the current block
+        data_block = data.loc[block]  # Get data for the current block
 
+        # Plot raster for this block using the `plot_callback_raster` function
         plot_callback_raster(
             data_block,
             ax=ax,
             y_offset=y_offset,
-            plot_stim_blocks=True,
-            show_legend=show_legend,
-            call_kwargs=call_kwargs,
-            stim_kwargs=stim_kwargs,
+            **raster_plot_kwargs,  # Pass additional plotting arguments
         )
 
+        # Increment the y_offset for the next block
         y_offset += len(data_block)
 
+    # Plot horizontal lines to separate blocks if requested
     if plot_hlines:
+        # Set default horizontal line arguments if none are provided
+        if hline_kwargs is None:
+            hline_kwargs = dict(
+                colors="k",
+                linestyles="solid",
+                linewidths=0.5,
+            )
+
+        # Draw the horizontal lines on the plot
         ax.hlines(
             y=block_locs,
-            xmin=xlim[0],
-            xmax=xlim[1],
+            xmin=hline_xlim[0],
+            xmax=hline_xlim[1],
+            **hline_kwargs,
+        )
+
+    # Add a secondary y-axis for block labels if requested
+    if show_block_axis:
+        block_axis = ax.secondary_yaxis(location="right")  # Create secondary y-axis
+        block_axis.set(
+            ylabel="Block",  # Label for the secondary y-axis
+            yticks=block_locs,  # Set the y-ticks to match block locations
+            yticklabels=blocks,  # Label blocks according to their identifiers
+        )
+
+    # Automatically adjust the view to fit the data
+    ax.autoscale_view()
+
+    # Set xlim for the entire plot (also affects horizontal lines)
+    ax.set(xlim=hline_xlim)
+
+    return ax
+
+
+def plot_callback_raster_multiday(
+    data,
+    ax=None,
+    hline_xlim=[0.1, 3],
+    hline_day_kwargs=None,
+    hline_block_kwargs=None,
+    show_day_axis=True,
+    y_offset_initial=0,
+    **raster_plot_kwargs,
+):
+    """
+    Plot callback raster plots for multiple days, with horizontal lines separating the days and blocks.
+
+    This function takes a DataFrame indexed by days and blocks, and plots callback raster plots for each
+    day, with horizontal lines separating them. Each day contains multiple blocks, which are plotted using
+    the `plot_callback_raster_multiblock` function. Optionally, a secondary y-axis can be added to label
+    the days.
+
+    Parameters:
+    - data: pandas DataFrame, required.
+      A DataFrame indexed by days and blocks, where each day contains trial data with multiple blocks.
+      Each block within a day is assumed to have its own callback raster plot data.
+
+    - ax: matplotlib Axes object, optional (default: None).
+      The Axes to plot on. If None, a new figure and axes will be created.
+
+    - hline_xlim: list, optional (default: [0.1, 3]).
+      The x-axis limits for the horizontal lines that separate the days. This will also set the
+      `xlim` for the entire plot.
+
+    - hline_day_kwargs: dict, optional (default: None).
+      Additional keyword arguments to customize the appearance of the horizontal lines separating the days
+      (e.g., color, line style). If None, default line properties will be used (solid black lines).
+
+    - hline_block_kwargs: dict, optional (default: None).
+      Additional keyword arguments to customize the appearance of the horizontal lines separating the blocks
+      within each day (e.g., color, line style). If None, default dashed black lines will be used.
+
+    - show_day_axis: bool, optional (default: True).
+      If True, a secondary y-axis will be added on the right side of the plot to label the days.
+
+    - y_offset_initial: int, optional (default: 0).
+      The initial vertical offset for plotting the first day. Subsequent days will be positioned
+      below this offset.
+
+    - **raster_plot_kwargs: additional keyword arguments.
+      These are passed directly to the `plot_callback_raster` function for customizing the plot
+      of individual callback raster blocks (e.g., plot colors, etc.).
+
+    Returns:
+    - ax: matplotlib Axes object.
+      The Axes object with the plot. The plot includes multiple callback raster blocks for each day,
+      horizontal lines, and a secondary y-axis for day labels if enabled.
+
+    Notes:
+    - `xlim` sets both `ax.xlim` and the `xmin`, `xmax` for the horizontal day lines.
+    - The plot automatically adjusts to the data provided, scaling the view as needed.
+
+    Example:
+    ```python
+    ax = plot_callback_raster_multiday(data, show_day_axis=True)
+    ```
+
+    """
+
+    # Create a new figure and axis if none are provided
+    if ax is None:
+        fig, ax = plt.subplots()
+
+    # Set default horizontal line properties if none are provided
+    if hline_day_kwargs is None:
+        hline_day_kwargs = dict(
             colors="k",
             linestyles="solid",
+            linewidths=2,
+        )
+
+    if hline_block_kwargs is None:
+        hline_block_kwargs = dict(
+            colors="k",
+            linestyles="dashed",
             linewidths=0.5,
         )
 
-    if show_block_axis:
-        block_axis = ax.secondary_yaxis(location="right")
-        block_axis.set(
-            ylabel="Block",
-            yticks=block_locs,
-            yticklabels=blocks,
+    # Extract and order days
+    days = list(set(data.index.get_level_values(0)))  # Get unique days
+    days.sort()
+
+    # Initialize vertical offset for plotting
+    y_offset = y_offset_initial
+    day_locs = []  # List to store y-locations for each day
+
+    # Plot data for each day
+    for day in days:
+        day_locs.append(y_offset)  # Store y-position of the current day
+        data_day = data.xs(day)  # Get data for the current day
+
+        # Plot multi-block raster for this day
+        plot_callback_raster_multiblock(
+            data_day,
+            ax=ax,
+            y_offset_initial=y_offset,
+            hline_kwargs=hline_block_kwargs,
+            show_block_axis=False,
+            **raster_plot_kwargs,  # Pass additional plotting arguments
         )
 
-    ax.set(
-        title=title,
-        xlim=xlim,
-        ylim=[0, len(data)],
+        # Increment the y_offset for the next day
+        y_offset += len(data_day)
+
+    # Draw the horizontal lines on the plot to separate days
+    ax.hlines(
+        y=day_locs,
+        xmin=hline_xlim[0],
+        xmax=hline_xlim[1],
+        **hline_day_kwargs,  # Apply line properties for day separators
     )
+
+    # Optionally add a secondary y-axis for day labels
+    if show_day_axis:
+        day_axis = ax.secondary_yaxis(location="right")  # Create secondary y-axis
+        day_axis.set(
+            ylabel="Day",  # Label for the secondary y-axis
+            yticks=day_locs,  # Set the y-ticks to match day locations
+            yticklabels=days,  # Label days according to their identifiers
+        )
+
+    # Automatically adjust the view to fit the data
+    ax.autoscale_view()
+
+    # Set xlim for the entire plot (also affects horizontal lines)
+    ax.set(xlim=hline_xlim)
 
     return ax
 
