@@ -202,7 +202,15 @@ def segment_notes(smooth, fs, min_int, min_dur, threshold):
     onsets = np.flatnonzero(trans > 0)
     offsets = np.flatnonzero(trans < 0)
 
-    assert len(onsets) == len(offsets)
+    # return onsets, offsets
+    if len(onsets) - len(offsets) == 1:  # extra onset, has to be at end
+        onsets = onsets[:-1]
+    elif len(offsets) - len(onsets) == 1:  # extra offset, has to be at start
+        offsets = offsets[1:]
+    elif len(onsets) == len(offsets):
+        pass
+    else:  # something funky.
+        raise ValueError("Cannot rectify mismatch in length of onsets/offsets")
 
     # merge any calls closer than min_int ms
     temp_int = offsets[:-1] - onsets[1:] * 1000 / fs

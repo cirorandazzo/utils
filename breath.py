@@ -12,6 +12,7 @@ import numpy as np
 def segment_breaths(
     breathing_unfilt,
     fs,
+    do_filter=True,
     b=None,
     a=None,
     threshold=lambda x: np.median(x),
@@ -22,23 +23,18 @@ def segment_breaths(
     Segments a raw breathing signal into inspiration and expiration phases.
 
     The function filters the input signal and identifies the onsets of inspiration and expiration
-    phases based on a threshold function applied to the filtered signal. The threshold function can
-    be customized for inspiration and expiration. The function returns the indices of the detected
-    transitions.
+    phases based on a threshold function applied to the filtered signal. Alternatively, threshold 
+    function can be set separately for inspiration and expiration. The function returns the frame
+    indices of the detected transitions (where 0 is first audio frame).
 
     Args:
         breathing_unfilt (numpy.ndarray): A 1D array representing the raw (unfiltered) breathing signal.
         fs (float): The sampling frequency (Hz) of the breathing signal.
-        b (numpy.ndarray, optional): Numerator coefficients of the low-pass filter. Default is None,
-                                      which results in a filter with a cutoff of 50 Hz.
-        a (numpy.ndarray, optional): Denominator coefficients of the low-pass filter. Default is None,
-                                      which results in a filter with a cutoff of 50 Hz.
-        threshold (function, optional): A threshold function used to determine the boundary for inspiration/expiration.
-                                         Default is `lambda x: np.median(x)`.
-        threshold_exp (function, optional): A custom threshold function for expiration phases. If None,
-                                             the `threshold` function is used.
-        threshold_insp (function, optional): A custom threshold function for inspiration phases. If None,
-                                              the `threshold` function is used.
+        do_filter (boolean): Whether to filter before thresholding. Default: True (filters inputed data)
+        b, a (numpy.ndarray, optional): Numerator & denominator coefficients of a filter. If either or both are None, uses a 50Hz lowpass butterworth filter. Default is None.
+        threshold (function, optional): A threshold function used to determine the boundary for inspiration/expiration. Default is `lambda x: np.median(x)`.
+        threshold_exp (function, optional): A custom threshold function for expiration phases. If None, the `threshold` function is used.
+        threshold_insp (function, optional): A custom threshold function for inspiration phases. If None, the `threshold` function is used.
 
     Returns:
         tuple: A tuple containing:
@@ -54,10 +50,13 @@ def segment_breaths(
     """
     from scipy.signal import butter, filtfilt
 
-    # Default: 20Hz low-pass filter
-    if b is None or a is None:
-        b, a = butter(N=2, Wn=50, btype="low", fs=fs)
-    breathing_filt = filtfilt(b, a, breathing_unfilt)
+    if do_filter:
+        # Default: 50Hz low-pass filter
+        if b is None or a is None:
+            b, a = butter(N=2, Wn=50, btype="low", fs=fs)
+        breathing_filt = filtfilt(b, a, breathing_unfilt)
+    else:
+        breathing_filt = breathing_unfilt
 
     # Set default thresholds
     if threshold_exp is None:
@@ -127,3 +126,67 @@ def make_notmat_vars(
     offsets = np.append(onsets[1:] - 1, last_offset)
 
     return (onsets, offsets, labels)
+
+
+def plot_breath_callback_trial(
+    audio,
+    fs,
+    stim_trial,
+    y_breath_labels,
+    pre_time_s,
+    post_time_s,
+    ylims,
+    st,
+    en,
+    ax=None,
+    color_dict={"exp": "r", "insp": "b"},
+):
+    import matplotlib.pyplot as plt
+
+    if ax is None:
+        fig, ax = plt.subplots(figsize=(10, 5))
+
+    # indices of waveform segment
+    ii_audio = (np.array([st - pre_time_s, st + post_time_s]) * fs).astype(int)
+
+    if ii_audio[1] >= len(audio):
+        ii_audio[1] = len(audio)
+
+    # plot waveform
+    y = audio[np.arange(*ii_audio)]
+    x = (np.arange(len(y)) / 44100) - pre_time_s
+    ax.plot(x, y, color="k", linewidth=0.5, label="breath")
+
+    # plot trial onset/offset (start of this stim & next stim)
+    ax.vlines(
+        x=[0, en - st],
+        ymin=ylims[0],
+        ymax=ylims[1],
+        color="g",
+        linewidth=3,
+        label="stimulus",
+    )
+
+    # plot breath overlay
+    ii_breaths = [c in ["exp", "insp"] for c in stim_trial["call_types"]]
+
+    if len(ii_breaths) > 0:
+        ax.hlines(
+            y=np.ones(sum(ii_breaths)) * y_breath_labels,
+            xmin=stim_trial["call_times_stim_aligned"][ii_breaths, 0],
+            xmax=stim_trial["call_times_stim_aligned"][ii_breaths, 1],
+            colors=[
+                color_dict[t] for t in np.array(stim_trial["call_types"])[ii_breaths]
+            ],
+            linewidths=4,
+            alpha=0.5,
+        )
+
+    ax.set(
+        xlim=[-1 * pre_time_s, post_time_s],
+        xlabel="Time, stim-aligned (s)",
+        ylabel="Breath pressure (raw)",
+        ylim=ylims,
+    )
+
+    return ax
