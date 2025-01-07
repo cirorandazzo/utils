@@ -20,6 +20,72 @@ from matplotlib.patches import Rectangle
 day_colors = {1: "#a2cffe", 2: "#840000"}
 
 
+def plot_callback_heatmap(
+    df,
+    field_name,
+    fig=None,
+    norm=None,
+    cmap_name="viridis",
+    bad_color="black",
+    **imshow_kwargs,
+):
+    if fig is None:
+        fig, ax = plt.subplots()
+    else:
+        ax = fig.axes
+        assert len(ax) == 1, "Can only plot on fig with 1 Axes."
+        ax = ax[0]
+
+    days, blocks = [np.unique(df.index.get_level_values(l)) for l in ("day", "block")]
+
+    # default to -1 to populate unfilled w diff color
+    X = -1 * np.ones([len(blocks), len(days)])
+
+    # construct heatmap
+
+    # for each day/block combo
+    for day, block in itertools.product(days, blocks):
+        ii_day = days == day
+        ii_block = blocks == block
+
+        row = df.xs(key=(day, block), level=("day", "block"))
+
+        if len(row) == 1:
+            X[ii_block, ii_day] = row.iloc[0][field_name]
+        elif len(row) == 0:
+            pass
+        else:
+            raise KeyError(
+                f"More than one entry found for d{day}/bl{block}. (Must be 0 or 1, was {len(row)}.)"
+            )
+
+    # prepare cmap. values not found will default to "bad_color"
+    cmap = plt.get_cmap(cmap_name)
+    cmap.set_bad(bad_color)
+
+    # norm to vmin, vmax in measure_range if passed.
+    if not (norm is None or isinstance(norm, (Normalize, str))):
+        assert len(norm) == 2, "`measure range` must be length 2! (vmin, vmax)"
+
+        norm = Normalize(*norm)
+
+    im = ax.imshow(
+        np.ma.masked_equal(X, -1),
+        cmap=cmap,
+        norm=norm,
+        origin="lower",
+        **imshow_kwargs,
+    )
+
+    cbar = fig.colorbar(im)
+    cbar.set_label(field_name)
+
+    ax.set_yticks(np.arange(len(blocks)), labels=blocks)
+    ax.set_xticks(np.arange(len(days)), labels=days)
+
+    return fig, ax, im, cbar
+
+
 def plot_callback_raster(
     data,
     ax=None,
