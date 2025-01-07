@@ -4,12 +4,86 @@
 # Plotting functions
 #
 
+import itertools
+
+import numpy as np
+import pandas as pd
+
+from sklearn.metrics import ConfusionMatrixDisplay
+
 import matplotlib.pyplot as plt
 from matplotlib.collections import PatchCollection
+from matplotlib.colors import Normalize
 from matplotlib.patches import Rectangle
 
 
 day_colors = {1: "#a2cffe", 2: "#840000"}
+
+
+def plot_callback_heatmap(
+    df,
+    field_name,
+    fig=None,
+    norm=None,
+    cmap_name="viridis",
+    bad_color="black",
+    **imshow_kwargs,
+):
+    if fig is None:
+        fig, ax = plt.subplots()
+    else:
+        ax = fig.axes
+        assert len(ax) == 1, "Can only plot on fig with 1 Axes."
+        ax = ax[0]
+
+    days, blocks = [np.unique(df.index.get_level_values(l)) for l in ("day", "block")]
+
+    # default to -1 to populate unfilled w diff color
+    X = -1 * np.ones([len(blocks), len(days)])
+
+    # construct heatmap
+
+    # for each day/block combo
+    for day, block in itertools.product(days, blocks):
+        ii_day = days == day
+        ii_block = blocks == block
+
+        row = df.xs(key=(day, block), level=("day", "block"))
+
+        if len(row) == 1:
+            X[ii_block, ii_day] = row.iloc[0][field_name]
+        elif len(row) == 0:
+            pass
+        else:
+            raise KeyError(
+                f"More than one entry found for d{day}/bl{block}. (Must be 0 or 1, was {len(row)}.)"
+            )
+
+    # prepare cmap. values not found will default to "bad_color"
+    cmap = plt.get_cmap(cmap_name)
+    cmap.set_bad(bad_color)
+
+    # norm to vmin, vmax in measure_range if passed.
+    if not (norm is None or isinstance(norm, (Normalize, str))):
+        assert len(norm) == 2, "`measure range` must be length 2! (vmin, vmax)"
+
+        norm = Normalize(*norm)
+
+    im = ax.imshow(
+        np.ma.masked_equal(X, -1),
+        cmap=cmap,
+        norm=norm,
+        origin="lower",
+        **imshow_kwargs,
+    )
+
+    cbar = fig.colorbar(im)
+    cbar.set_label(field_name)
+
+    ax.set_yticks(np.arange(len(blocks)), labels=blocks)
+    ax.set_xticks(np.arange(len(days)), labels=days)
+
+    return fig, ax, im, cbar
 
 
 def plot_callback_raster(
@@ -37,7 +111,7 @@ def plot_callback_raster(
     - call_type_plot_kwargs: dict, contains plot style parameters for each call type (default: None).
     - default_plot_kwargs: dict, default plot style parameters (for call types not in `call_type_plot_kwargs`) (default: None).
     - force_yticks_int: bool, whether to force integer tick marks on the y-axis (default: True).
-    - **common_plot_kwargs: default kwargs for PatchCollection (and Rectangle proxy artists for legend) common across all call types (superceded by keywords in call_type_plot_kwargs). By default, sets alpha=0.7 and edgecolor=None. 
+    - **common_plot_kwargs: default kwargs for PatchCollection (and Rectangle proxy artists for legend) common across all call types (superceded by keywords in call_type_plot_kwargs). By default, sets alpha=0.7 and edgecolor=None.
 
     Returns:
     - ax: matplotlib Axes object with the plotted raster.
@@ -46,7 +120,7 @@ def plot_callback_raster(
     # Use default plotting kwargs if not provided
     if call_type_plot_kwargs is None:
         call_type_plot_kwargs = {
-            "Stimulus":  dict(facecolor="red"),
+            "Stimulus": dict(facecolor="red"),
             "Call": dict(facecolor="black"),
             "Song": dict(facecolor="blue"),
         }
@@ -55,7 +129,7 @@ def plot_callback_raster(
         default_plot_kwargs = dict(facecolor="green")
 
     # default kwargs common across all call types (unless superceded)
-    common_plot_kwargs = {**{'alpha': 0.7, 'edgecolor':None}, **common_plot_kwargs}
+    common_plot_kwargs = {**{"alpha": 0.7, "edgecolor": None}, **common_plot_kwargs}
 
     # Create figure and axes if not provided
     if ax is None:
@@ -98,7 +172,10 @@ def plot_callback_raster(
     # Plot PatchCollection objects & create legend proxies
     legend_proxies = {}
     for call_type, type_boxes in boxes.items():
-        style = {**common_plot_kwargs, **call_type_plot_kwargs.get(call_type, default_plot_kwargs)}
+        style = {
+            **common_plot_kwargs,
+            **call_type_plot_kwargs.get(call_type, default_plot_kwargs),
+        }
 
         call_patches = PatchCollection(type_boxes, **style)
         ax.add_collection(call_patches)
@@ -424,9 +501,6 @@ def plot_group_hist(
     ax : matplotlib Axes
         The axes on which the plot is drawn.
     """
-    import matplotlib.pyplot as plt
-    import numpy as np
-    import pandas as pd
 
     if ax is None:
         fig, ax = plt.subplots()
@@ -492,9 +566,6 @@ def plot_violins_by_block(
     """
     TODO: document utils.plot.plot_violins_by_block
     """
-    import pandas as pd
-    import numpy as np
-    import matplotlib.pyplot as plt
 
     for day in days:
         data = bird_data.loc[day]
@@ -559,10 +630,6 @@ def plot_pre_post(
 
     Given `df_day` which has field `fieldname`, plot pre/post type line plot. `color` can be a pd.DataFrame with bird names as index containing color info for every bird in column "color", or a single matplotlib color
     """
-    import matplotlib.pyplot as plt
-    import matplotlib.patches as mpatches
-    import numpy as np
-    import pandas as pd
 
     if ax is None:
         fig, ax = plt.subplots()
@@ -607,10 +674,6 @@ def plot_pre_post(
 
 def make_graph(transition_counts):
     import networkx as nx
-    import numpy as np
-    import pandas as pd
-
-    import matplotlib.pyplot as plt
 
     G = nx.DiGraph()
 
@@ -638,7 +701,6 @@ def draw_graph(
     font_kwargs={},
 ):
     import networkx as nx
-    import matplotlib.pyplot as plt
 
     if ax is None:
         fig, ax = plt.subplots()
@@ -681,9 +743,6 @@ def confusion_matrix_plot(
     values_format=".1e",
     **plot_kwarg,
 ):
-    import matplotlib.pyplot as plt
-    import numpy as np
-    from sklearn.metrics import ConfusionMatrixDisplay
 
     if ax is None:
         fig, ax = plt.subplots()
