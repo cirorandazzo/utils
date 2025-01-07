@@ -464,14 +464,16 @@ def plot_group_hist(
     df,
     field,
     grouping_level,
+    groups_to_plot=None,
     group_colors=None,
     density=False,
     ax=None,
     ignore_nan=False,
     alphabetize_legend=False,
     alt_labels=None,
-    histogram_kwargs={},
-    stair_kwargs={},
+    binwidth=None,
+    histogram_kwargs=None,
+    stair_kwargs=None,
 ):
     """
     TODO: add new parameters to documentation
@@ -486,6 +488,8 @@ def plot_group_hist(
         The name of the column in `df` for which the histogram is plotted.
     grouping_level : int or str
         Multi-Index level by which to group. Can be int or string (see pandas.Index.unique)
+    groups_to_plot : iterable, optional
+        List of groups in grouping_level to plot. If None, plots all groups found. Default: None.
     group_colors : dict or iterable, optional
         A dictionary mapping group names to colors or an iterable of colors for each group.
         If not provided, matplotlib default colors will be used.
@@ -505,14 +509,30 @@ def plot_group_hist(
     if ax is None:
         fig, ax = plt.subplots()
 
+    if groups_to_plot is None:
+        df.index.unique(level=grouping_level)
+
+    if histogram_kwargs is None:
+        histogram_kwargs = {}
+
+    if stair_kwargs is None:
+        stair_kwargs = {}
+
     # use same binning for all groups
-    if "range" not in histogram_kwargs.keys():
+    if binwidth is not None:
+        assert "bins" not in histogram_kwargs.keys(), "Can't provide both `histogram_kwargs['bins']` and `binwidth`."
+
+        histogram_kwargs["bins"] = np.arange(
+            np.min(df[field]),
+            np.max(df[field]) + binwidth,
+            binwidth,
+        )
+
+    elif "range" not in histogram_kwargs.keys():
         histogram_kwargs["range"] = (np.min(df[field]), np.max(df[field]))
 
-    for i_grp, groupname in enumerate(df.index.unique(level=grouping_level)):
-        group_data = np.array(
-            df.loc[df.index.get_level_values(level=grouping_level) == groupname, field]
-        )
+    for i_grp, groupname in enumerate(groups_to_plot):
+        group_data = df.xs(key=groupname, level=grouping_level)[field]
 
         if ignore_nan:
             group_data = group_data[~np.isnan(group_data)]
@@ -539,9 +559,7 @@ def plot_group_hist(
         else:
             label = f"{alt_labels[groupname]} ({len(group_data)})"
 
-        ax.stairs(
-            hist, edges, label=label, color=color, **stair_kwargs.get(groupname, {})
-        )
+        ax.stairs(hist, edges, label=label, color=color, **stair_kwargs)
 
     ax.legend()
     if alphabetize_legend:
