@@ -4,8 +4,16 @@
 # Plotting functions
 #
 
+import itertools
+
+import numpy as np
+import pandas as pd
+
+from sklearn.metrics import ConfusionMatrixDisplay
+
 import matplotlib.pyplot as plt
 from matplotlib.collections import PatchCollection
+from matplotlib.colors import Normalize
 from matplotlib.patches import Rectangle
 
 
@@ -427,9 +435,6 @@ def plot_group_hist(
     ax : matplotlib Axes
         The axes on which the plot is drawn.
     """
-    import matplotlib.pyplot as plt
-    import numpy as np
-    import pandas as pd
 
     if ax is None:
         fig, ax = plt.subplots()
@@ -495,9 +500,6 @@ def plot_violins_by_block(
     """
     TODO: document utils.plot.plot_violins_by_block
     """
-    import pandas as pd
-    import numpy as np
-    import matplotlib.pyplot as plt
 
     for day in days:
         data = bird_data.loc[day]
@@ -562,10 +564,6 @@ def plot_pre_post(
 
     Given `df_day` which has field `fieldname`, plot pre/post type line plot. `color` can be a pd.DataFrame with bird names as index containing color info for every bird in column "color", or a single matplotlib color
     """
-    import matplotlib.pyplot as plt
-    import matplotlib.patches as mpatches
-    import numpy as np
-    import pandas as pd
 
     if ax is None:
         fig, ax = plt.subplots()
@@ -610,10 +608,6 @@ def plot_pre_post(
 
 def make_graph(transition_counts):
     import networkx as nx
-    import numpy as np
-    import pandas as pd
-
-    import matplotlib.pyplot as plt
 
     G = nx.DiGraph()
 
@@ -641,7 +635,6 @@ def draw_graph(
     font_kwargs={},
 ):
     import networkx as nx
-    import matplotlib.pyplot as plt
 
     if ax is None:
         fig, ax = plt.subplots()
@@ -684,9 +677,6 @@ def confusion_matrix_plot(
     values_format=".1e",
     **plot_kwarg,
 ):
-    import matplotlib.pyplot as plt
-    import numpy as np
-    from sklearn.metrics import ConfusionMatrixDisplay
 
     if ax is None:
         fig, ax = plt.subplots()
