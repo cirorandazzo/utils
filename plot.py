@@ -37,7 +37,7 @@ def plot_callback_raster(
     - call_type_plot_kwargs: dict, contains plot style parameters for each call type (default: None).
     - default_plot_kwargs: dict, default plot style parameters (for call types not in `call_type_plot_kwargs`) (default: None).
     - force_yticks_int: bool, whether to force integer tick marks on the y-axis (default: True).
-    - **common_plot_kwargs: default kwargs for PatchCollection (and Rectangle proxy artists for legend) common across all call types (superceded by keywords in call_type_plot_kwargs). By default, sets alpha=0.7 and edgecolor=None. 
+    - **common_plot_kwargs: default kwargs for PatchCollection (and Rectangle proxy artists for legend) common across all call types (superceded by keywords in call_type_plot_kwargs). By default, sets alpha=0.7 and edgecolor=None.
 
     Returns:
     - ax: matplotlib Axes object with the plotted raster.
@@ -46,7 +46,7 @@ def plot_callback_raster(
     # Use default plotting kwargs if not provided
     if call_type_plot_kwargs is None:
         call_type_plot_kwargs = {
-            "Stimulus":  dict(facecolor="red"),
+            "Stimulus": dict(facecolor="red"),
             "Call": dict(facecolor="black"),
             "Song": dict(facecolor="blue"),
         }
@@ -55,7 +55,7 @@ def plot_callback_raster(
         default_plot_kwargs = dict(facecolor="green")
 
     # default kwargs common across all call types (unless superceded)
-    common_plot_kwargs = {**{'alpha': 0.7, 'edgecolor':None}, **common_plot_kwargs}
+    common_plot_kwargs = {**{"alpha": 0.7, "edgecolor": None}, **common_plot_kwargs}
 
     # Create figure and axes if not provided
     if ax is None:
@@ -98,7 +98,10 @@ def plot_callback_raster(
     # Plot PatchCollection objects & create legend proxies
     legend_proxies = {}
     for call_type, type_boxes in boxes.items():
-        style = {**common_plot_kwargs, **call_type_plot_kwargs.get(call_type, default_plot_kwargs)}
+        style = {
+            **common_plot_kwargs,
+            **call_type_plot_kwargs.get(call_type, default_plot_kwargs),
+        }
 
         call_patches = PatchCollection(type_boxes, **style)
         ax.add_collection(call_patches)
