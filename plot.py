@@ -8,10 +8,6 @@ import matplotlib.pyplot as plt
 from matplotlib.collections import PatchCollection
 from matplotlib.patches import Rectangle
 
-callback_raster_stim_kwargs = dict(color="red", alpha=0.5)
-callback_raster_call_kwargs = dict(color="black", alpha=0.5)
-callback_raster_song_kwargs = dict(color="blue", alpha=0.5)
-callback_raster_default_kwargs = dict(color="green", alpha=0.5)
 
 day_colors = {1: "#a2cffe", 2: "#840000"}
 
@@ -26,6 +22,7 @@ def plot_callback_raster(
     call_type_plot_kwargs=None,
     default_plot_kwargs=None,
     force_yticks_int=True,
+    **common_plot_kwargs,
 ):
     """
     Plots a raster plot of callback responses for stimulus-aligned data.
@@ -38,8 +35,9 @@ def plot_callback_raster(
     - y_offset: float, vertical offset for positioning calls along the y-axis. Mostly useful when plotting multiple rasters stacked on the same Axes - eg, see `plot_callback_raster_multiblock` (default: 0).
     - call_types_to_plot: list or "all", specifies which call types to include (default: "all").
     - call_type_plot_kwargs: dict, contains plot style parameters for each call type (default: None).
-    - default_plot_kwargs: dict, default plot style parameters (default: None).
+    - default_plot_kwargs: dict, default plot style parameters (for call types not in `call_type_plot_kwargs`) (default: None).
     - force_yticks_int: bool, whether to force integer tick marks on the y-axis (default: True).
+    - **common_plot_kwargs: default kwargs for PatchCollection (and Rectangle proxy artists for legend) common across all call types (superceded by keywords in call_type_plot_kwargs). By default, sets alpha=0.7 and edgecolor=None. 
 
     Returns:
     - ax: matplotlib Axes object with the plotted raster.
@@ -48,13 +46,16 @@ def plot_callback_raster(
     # Use default plotting kwargs if not provided
     if call_type_plot_kwargs is None:
         call_type_plot_kwargs = {
-            "Stimulus": callback_raster_stim_kwargs,
-            "Call": callback_raster_call_kwargs,
-            "Song": callback_raster_song_kwargs,
+            "Stimulus":  dict(facecolor="red"),
+            "Call": dict(facecolor="black"),
+            "Song": dict(facecolor="blue"),
         }
 
     if default_plot_kwargs is None:
-        default_plot_kwargs = callback_raster_default_kwargs
+        default_plot_kwargs = dict(facecolor="green")
+
+    # default kwargs common across all call types (unless superceded)
+    common_plot_kwargs = {**{'alpha': 0.7, 'edgecolor':None}, **common_plot_kwargs}
 
     # Create figure and axes if not provided
     if ax is None:
@@ -97,7 +98,8 @@ def plot_callback_raster(
     # Plot PatchCollection objects & create legend proxies
     legend_proxies = {}
     for call_type, type_boxes in boxes.items():
-        style = call_type_plot_kwargs.get(call_type, default_plot_kwargs)
+        style = {**common_plot_kwargs, **call_type_plot_kwargs.get(call_type, default_plot_kwargs)}
+
         call_patches = PatchCollection(type_boxes, **style)
         ax.add_collection(call_patches)
 
