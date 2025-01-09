@@ -27,6 +27,8 @@ def plot_callback_heatmap(
     norm=None,
     cmap_name="viridis",
     bad_color="black",
+    day_labels=None,
+    block_labels=None,
     **imshow_kwargs,
 ):
     if fig is None:
@@ -80,8 +82,11 @@ def plot_callback_heatmap(
     cbar = fig.colorbar(im)
     cbar.set_label(field_name)
 
-    ax.set_yticks(np.arange(len(blocks)), labels=blocks)
-    ax.set_xticks(np.arange(len(days)), labels=days)
+    block_labels = _parse_labels(blocks, block_labels)
+    day_labels = _parse_labels(days, day_labels)
+
+    ax.set_yticks(np.arange(len(blocks)), labels=block_labels)
+    ax.set_xticks(np.arange(len(days)), labels=day_labels)
 
     return fig, ax, im, cbar
 
@@ -448,13 +453,7 @@ def plot_callback_raster_multiday(
         **hline_day_kwargs,  # Apply line properties for day separators
     )
 
-    # Prepare day labels.
-    if day_labels is None:  # Default to day #
-        day_labels = days
-    elif isinstance(day_labels, dict):  # Dict lookup
-        day_labels = [day_labels[d] for d in days]
-    else:  # Use day_labels as provided
-        assert len(day_labels) == len(days)
+    day_labels = _parse_labels(days, day_labels)
 
     # Optionally add a secondary y-axis for day labels
     if show_day_axis:
@@ -844,18 +843,6 @@ def _parse_labels(values, labels):
     Parameters:
     - values (list): 
         A list of values for which labels are to be assigned. These are typically days or trial identifiers.
-def _parse_labels(values, labels):
-    """
-    Parse and format labels based on the input values and optional custom labels.
-
-    This function processes the `labels` argument based on the provided `values`. If no custom labels 
-    are provided, it defaults to using the values themselves. If a dictionary of labels is provided, 
-    it maps each value to its corresponding label using the dictionary. If a list of labels is provided, 
-    it ensures that the length matches the number of values.
-
-    Parameters:
-    - values (list): 
-        A list of values for which labels are to be assigned. These are typically days or trial identifiers.
 
     - labels (list, dict, or None): 
         Custom labels to assign to the values. If `None`, the function defaults to using the `values` themselves. 
@@ -880,35 +867,12 @@ def _parse_labels(values, labels):
     - If `labels` is a dictionary, it should map each item in `values` to a corresponding label.
 
     """
-
-    - labels (list, dict, or None): 
-        Custom labels to assign to the values. If `None`, the function defaults to using the `values` themselves. 
-        If a dictionary, it should map each value to its corresponding label. If a list, it should have the same 
-        length as `values`.
-
-    Returns:
-    - labels (list): 
-        A list of labels corresponding to each value in `values`. The labels will be either the input `values` 
-        themselves, mapped from a dictionary, or directly provided as a list.
-
-    Example:
-    ```python
-    values = [1, 2, 3]
-    labels = {1: 'Day 1', 2: 'Day 2', 3: 'Day 3'}
-    result = _parse_labels(values, labels)
-    # result will be ['Day 1', 'Day 2', 'Day 3']
-    ```
-
-    Notes:
-    - If `labels` is provided as a list, it must have the same length as `values`. Otherwise, an assertion error will be raised.
-    - If `labels` is a dictionary, it should map each item in `values` to a corresponding label.
-
-    """
-    if labels is None:  # Default to day #
+    
+    if labels is None:  # Default to values as labels
         labels = values
-    elif isinstance(labels, dict):  # Dict lookup
+    elif isinstance(labels, dict):  # Dict lookup for labels
         labels = [labels[d] for d in values]
-    else:  # Use labels as provided
+    else:  # Use labels as provided, ensuring the lengths match
         assert len(labels) == len(values)
 
     return labels
