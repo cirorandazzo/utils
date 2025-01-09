@@ -533,7 +533,9 @@ def plot_group_hist(
 
     # use same binning for all groups
     if binwidth is not None:
-        assert "bins" not in histogram_kwargs.keys(), "Can't provide both `histogram_kwargs['bins']` and `binwidth`."
+        assert (
+            "bins" not in histogram_kwargs.keys()
+        ), "Can't provide both `histogram_kwargs['bins']` and `binwidth`."
 
         histogram_kwargs["bins"] = np.arange(
             np.min(df[field]),
@@ -831,27 +833,28 @@ def get_custom_tab25_cmap():
 
     return cmap
 
+
 def _parse_labels(values, labels):
     """
     Parse and format labels based on the input values and optional custom labels.
 
-    This function processes the `labels` argument based on the provided `values`. If no custom labels 
-    are provided, it defaults to using the values themselves. If a dictionary of labels is provided, 
-    it maps each value to its corresponding label using the dictionary. If a list of labels is provided, 
+    This function processes the `labels` argument based on the provided `values`. If no custom labels
+    are provided, it defaults to using the values themselves. If a dictionary of labels is provided,
+    it maps each value to its corresponding label using the dictionary. If a list of labels is provided,
     it ensures that the length matches the number of values.
 
     Parameters:
-    - values (list): 
+    - values (list):
         A list of values for which labels are to be assigned. These are typically days or trial identifiers.
 
-    - labels (list, dict, or None): 
-        Custom labels to assign to the values. If `None`, the function defaults to using the `values` themselves. 
-        If a dictionary, it should map each value to its corresponding label. If a list, it should have the same 
+    - labels (list, dict, or None):
+        Custom labels to assign to the values. If `None`, the function defaults to using the `values` themselves.
+        If a dictionary, it should map each value to its corresponding label. If a list, it should have the same
         length as `values`.
 
     Returns:
-    - labels (list): 
-        A list of labels corresponding to each value in `values`. The labels will be either the input `values` 
+    - labels (list):
+        A list of labels corresponding to each value in `values`. The labels will be either the input `values`
         themselves, mapped from a dictionary, or directly provided as a list.
 
     Example:
@@ -867,7 +870,7 @@ def _parse_labels(values, labels):
     - If `labels` is a dictionary, it should map each item in `values` to a corresponding label.
 
     """
-    
+
     if labels is None:  # Default to values as labels
         labels = values
     elif isinstance(labels, dict):  # Dict lookup for labels
