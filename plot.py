@@ -831,3 +831,84 @@ def get_custom_tab25_cmap():
     )
 
     return cmap
+
+def _parse_labels(values, labels):
+    """
+    Parse and format labels based on the input values and optional custom labels.
+
+    This function processes the `labels` argument based on the provided `values`. If no custom labels 
+    are provided, it defaults to using the values themselves. If a dictionary of labels is provided, 
+    it maps each value to its corresponding label using the dictionary. If a list of labels is provided, 
+    it ensures that the length matches the number of values.
+
+    Parameters:
+    - values (list): 
+        A list of values for which labels are to be assigned. These are typically days or trial identifiers.
+def _parse_labels(values, labels):
+    """
+    Parse and format labels based on the input values and optional custom labels.
+
+    This function processes the `labels` argument based on the provided `values`. If no custom labels 
+    are provided, it defaults to using the values themselves. If a dictionary of labels is provided, 
+    it maps each value to its corresponding label using the dictionary. If a list of labels is provided, 
+    it ensures that the length matches the number of values.
+
+    Parameters:
+    - values (list): 
+        A list of values for which labels are to be assigned. These are typically days or trial identifiers.
+
+    - labels (list, dict, or None): 
+        Custom labels to assign to the values. If `None`, the function defaults to using the `values` themselves. 
+        If a dictionary, it should map each value to its corresponding label. If a list, it should have the same 
+        length as `values`.
+
+    Returns:
+    - labels (list): 
+        A list of labels corresponding to each value in `values`. The labels will be either the input `values` 
+        themselves, mapped from a dictionary, or directly provided as a list.
+
+    Example:
+    ```python
+    values = [1, 2, 3]
+    labels = {1: 'Day 1', 2: 'Day 2', 3: 'Day 3'}
+    result = _parse_labels(values, labels)
+    # result will be ['Day 1', 'Day 2', 'Day 3']
+    ```
+
+    Notes:
+    - If `labels` is provided as a list, it must have the same length as `values`. Otherwise, an assertion error will be raised.
+    - If `labels` is a dictionary, it should map each item in `values` to a corresponding label.
+
+    """
+
+    - labels (list, dict, or None): 
+        Custom labels to assign to the values. If `None`, the function defaults to using the `values` themselves. 
+        If a dictionary, it should map each value to its corresponding label. If a list, it should have the same 
+        length as `values`.
+
+    Returns:
+    - labels (list): 
+        A list of labels corresponding to each value in `values`. The labels will be either the input `values` 
+        themselves, mapped from a dictionary, or directly provided as a list.
+
+    Example:
+    ```python
+    values = [1, 2, 3]
+    labels = {1: 'Day 1', 2: 'Day 2', 3: 'Day 3'}
+    result = _parse_labels(values, labels)
+    # result will be ['Day 1', 'Day 2', 'Day 3']
+    ```
+
+    Notes:
+    - If `labels` is provided as a list, it must have the same length as `values`. Otherwise, an assertion error will be raised.
+    - If `labels` is a dictionary, it should map each item in `values` to a corresponding label.
+
+    """
+    if labels is None:  # Default to day #
+        labels = values
+    elif isinstance(labels, dict):  # Dict lookup
+        labels = [labels[d] for d in values]
+    else:  # Use labels as provided
+        assert len(labels) == len(values)
+
+    return labels
