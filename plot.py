@@ -332,61 +332,67 @@ def plot_callback_raster_multiday(
     hline_block_kwargs=None,
     show_day_axis=True,
     y_offset_initial=0,
+    day_labels=None,
     **raster_plot_kwargs,
 ):
     """
     Plot callback raster plots for multiple days, with horizontal lines separating the days and blocks.
 
-    This function takes a DataFrame indexed by days and blocks, and plots callback raster plots for each
-    day, with horizontal lines separating them. Each day contains multiple blocks, which are plotted using
-    the `plot_callback_raster_multiblock` function. Optionally, a secondary y-axis can be added to label
-    the days.
+    This function takes a DataFrame indexed by days and blocks, and plots a callback raster. Every
+    day of callbacks is stacked, with horizontal lines separating the days and blocks. Optionally, a
+    secondary y-axis can be added to label the days.
 
     Parameters:
-    - data: pandas DataFrame, required.
-      A DataFrame indexed by days and blocks, where each day contains trial data with multiple blocks.
-      Each block within a day is assumed to have its own callback raster plot data.
+    - data (pandas DataFrame, required):
+        A DataFrame indexed by days and blocks, where each day contains trial data with multiple blocks.
+        Each block within a day is assumed to have its own callback raster plot data.
 
-    - ax: matplotlib Axes object, optional (default: None).
-      The Axes to plot on. If None, a new figure and axes will be created.
+    - ax (matplotlib Axes object, optional):
+        The Axes to plot on. If None, a new figure and axes will be created. (default: None)
 
-    - hline_xlim: list, optional (default: [0.1, 3]).
-      The x-axis limits for the horizontal lines that separate the days. This will also set the
-      `xlim` for the entire plot.
+    - hline_xlim (list of float, optional):
+        The x-axis limits for the horizontal lines that separate the days. This also sets the `xlim` for
+        the entire plot. (default: [0.1, 3])
 
-    - hline_day_kwargs: dict, optional (default: None).
-      Additional keyword arguments to customize the appearance of the horizontal lines separating the days
-      (e.g., color, line style). If None, default line properties will be used (solid black lines).
+    - hline_day_kwargs (dict, optional):
+        Additional keyword arguments to customize the appearance of the horizontal lines separating the days
+        (e.g., color, line style). If None, default line properties will be used (solid black lines).
+        (default: None)
 
-    - hline_block_kwargs: dict, optional (default: None).
-      Additional keyword arguments to customize the appearance of the horizontal lines separating the blocks
-      within each day (e.g., color, line style). If None, default dashed black lines will be used.
+    - hline_block_kwargs (dict, optional):
+        Additional keyword arguments to customize the appearance of the horizontal lines separating the blocks
+        within each day (e.g., color, line style). If None, default dashed black lines will be used.
+        (default: None)
 
-    - show_day_axis: bool, optional (default: True).
-      If True, a secondary y-axis will be added on the right side of the plot to label the days.
+    - show_day_axis (bool, optional):
+        If True, a secondary y-axis will be added on the right side of the plot to label the days.
+        (default: True)
 
-    - y_offset_initial: int, optional (default: 0).
-      The initial vertical offset for plotting the first day. Subsequent days will be positioned
-      below this offset.
+    - y_offset_initial (int, optional):
+        The initial vertical offset for plotting the first day. Subsequent days will be positioned below this offset.
+        (default: 0)
 
-    - **raster_plot_kwargs: additional keyword arguments.
-      These are passed directly to the `plot_callback_raster` function for customizing the plot
-      of individual callback raster blocks (e.g., plot colors, etc.).
+    - day_labels (list or dict, optional):
+        Labels for each day. If None, the days will be labeled with their identifiers (e.g., Day 1, Day 2, etc.).
+        If a dictionary is provided, it should map days to custom labels. (default: None)
+
+    - **raster_plot_kwargs (additional keyword arguments):
+        These are passed directly to the `plot_callback_raster` function for customizing the plot of individual
+        callback raster blocks (e.g., plot colors, etc.).
 
     Returns:
-    - ax: matplotlib Axes object.
-      The Axes object with the plot. The plot includes multiple callback raster blocks for each day,
-      horizontal lines, and a secondary y-axis for day labels if enabled.
+    - ax (matplotlib Axes object):
+        The Axes object with the plot. The plot includes multiple callback raster blocks for each day, horizontal
+        lines, and a secondary y-axis for day labels if enabled.
 
     Notes:
-    - `xlim` sets both `ax.xlim` and the `xmin`, `xmax` for the horizontal day lines.
+    - The `xlim` parameter sets both `ax.xlim` and the `xmin`, `xmax` for the horizontal day lines.
     - The plot automatically adjusts to the data provided, scaling the view as needed.
 
     Example:
     ```python
     ax = plot_callback_raster_multiday(data, show_day_axis=True)
     ```
-
     """
 
     # Create a new figure and axis if none are provided
@@ -442,13 +448,21 @@ def plot_callback_raster_multiday(
         **hline_day_kwargs,  # Apply line properties for day separators
     )
 
+    # Prepare day labels.
+    if day_labels is None:  # Default to day #
+        day_labels = days
+    elif isinstance(day_labels, dict):  # Dict lookup
+        day_labels = [day_labels[d] for d in days]
+    else:  # Use day_labels as provided
+        assert len(day_labels) == len(days)
+
     # Optionally add a secondary y-axis for day labels
     if show_day_axis:
         day_axis = ax.secondary_yaxis(location="right")  # Create secondary y-axis
         day_axis.set(
             ylabel="Day",  # Label for the secondary y-axis
             yticks=day_locs,  # Set the y-ticks to match day locations
-            yticklabels=days,  # Label days according to their identifiers
+            yticklabels=day_labels,  # Label days according to their identifiers
         )
 
     # Automatically adjust the view to fit the data
