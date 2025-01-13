@@ -481,7 +481,7 @@ def plot_group_hist(
     group_colors=None,
     density=False,
     ax=None,
-    ignore_nan=False,
+    ignore_nan="non/total",
     alphabetize_legend=False,
     alt_labels=None,
     binwidth=None,
@@ -510,8 +510,8 @@ def plot_group_hist(
         If True, plot density (ie, normalized to count) instead of raw count for each group.
     ax : matplotlib AxesSubplot object, optional
         The axes on which to draw the plot. If not provided, a new figure and axes will be created.
-    ignore_nan: bool, optional
-        If True, cut nan values out of plotted data. Else, np.histogram throws ValueError if nan values are in data to plot.
+    ignore_nan: bool or string, optional
+        If True, cut nan values out of plotted data. If false, np.histogram works, but legend value includes nan value count. If "non/total", legend shows non-nan value count divided by total value count. Default: "non/total".
 
     Returns:
     --------
@@ -549,8 +549,17 @@ def plot_group_hist(
     for i_grp, groupname in enumerate(groups_to_plot):
         group_data = df.xs(key=groupname, level=grouping_level)[field]
 
-        if ignore_nan:
+        if ignore_nan == True:
             group_data = group_data[~np.isnan(group_data)]
+            length_string = f"({len(group_data)})"
+        elif ignore_nan == "non/total":  # show non-nan div by total
+            n_with_nan = len(group_data)
+            group_data = group_data[~np.isnan(group_data)]
+            length_string = f"({len(group_data)}/{n_with_nan})"
+        elif ignore_nan == False:
+            length_string = f"({len(group_data)})"
+        else:
+            KeyError(f"Unknown input for ignore_nan: {ignore_nan}")
 
         hist, edges = np.histogram(group_data, **histogram_kwargs)
 
@@ -570,9 +579,9 @@ def plot_group_hist(
             color = f"C{i_grp}"
 
         if alt_labels is None or groupname not in alt_labels.keys():
-            label = f"{grouping_level} {groupname} ({len(group_data)})"
+            label = f"{grouping_level} {groupname} {length_string}"
         else:
-            label = f"{alt_labels[groupname]} ({len(group_data)})"
+            label = f"{alt_labels[groupname]}{length_string}"
 
         ax.stairs(hist, edges, label=label, color=color, **stair_kwargs)
 
