@@ -8,6 +8,8 @@
 
 import numpy as np
 
+import matplotlib.pyplot as plt
+from matplotlib.collections import LineCollection
 
 def segment_breaths(
     breathing_unfilt,
@@ -129,37 +131,36 @@ def make_notmat_vars(
 
 
 def plot_breath_callback_trial(
-    audio,
+    breath,
     fs,
     stim_trial,
     y_breath_labels,
     pre_time_s,
     post_time_s,
     ylims,
-    st,
-    en,
+    st_s,
+    en_s,
     ax=None,
     color_dict={"exp": "r", "insp": "b"},
 ):
-    import matplotlib.pyplot as plt
 
     if ax is None:
         fig, ax = plt.subplots(figsize=(10, 5))
 
     # indices of waveform segment
-    ii_audio = (np.array([st - pre_time_s, st + post_time_s]) * fs).astype(int)
+    ii_audio = (np.array([st_s - pre_time_s, st_s + post_time_s]) * fs).astype(int)
 
-    if ii_audio[1] >= len(audio):
-        ii_audio[1] = len(audio)
+    if ii_audio[1] >= len(breath):
+        ii_audio[1] = len(breath)
 
     # plot waveform
-    y = audio[np.arange(*ii_audio)]
+    y = breath[np.arange(*ii_audio)]
     x = (np.arange(len(y)) / 44100) - pre_time_s
     ax.plot(x, y, color="k", linewidth=0.5, label="breath")
 
     # plot trial onset/offset (start of this stim & next stim)
     ax.vlines(
-        x=[0, en - st],
+        x=[0, en_s - st_s],
         ymin=ylims[0],
         ymax=ylims[1],
         color="g",
@@ -171,16 +172,25 @@ def plot_breath_callback_trial(
     ii_breaths = [c in ["exp", "insp"] for c in stim_trial["call_types"]]
 
     if len(ii_breaths) > 0:
-        ax.hlines(
-            y=np.ones(sum(ii_breaths)) * y_breath_labels,
-            xmin=stim_trial["call_times_stim_aligned"][ii_breaths, 0],
-            xmax=stim_trial["call_times_stim_aligned"][ii_breaths, 1],
-            colors=[
-                color_dict[t] for t in np.array(stim_trial["call_types"])[ii_breaths]
-            ],
-            linewidths=4,
-            alpha=0.5,
-        )
+        if y_breath_labels == "infer":
+            br2fr = lambda t_br: min((fs * (t_br + st_s)).astype(int), len(breath)-1)  # rounding might take slightly out of range
+
+            y_func = lambda br: breath[br2fr(br)]
+
+        else:
+            y_func = lambda br: y_breath_labels
+
+        arcs = [
+            np.array([[br_st, y_func(br_st)], [br_en, y_func(br_en)]])
+            for br_st, br_en in np.array(stim_trial["call_times_stim_aligned"])[
+                ii_breaths
+            ]
+        ]
+        colors = [color_dict[t] for t in np.array(stim_trial["call_types"])[ii_breaths]]
+
+        lc = LineCollection(arcs, colors=colors,linewidths=4,
+                    alpha=0.5,)
+        ax.add_collection(lc)
 
     ax.set(
         xlim=[-1 * pre_time_s, post_time_s],
