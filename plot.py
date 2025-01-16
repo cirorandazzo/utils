@@ -271,7 +271,9 @@ def plot_callback_raster_multiblock(
         fig, ax = plt.subplots()
 
     # Extract and order blocks
-    blocks = list(set(data.index.get_level_values(block_level_name)))  # Get unique blocks
+    blocks = list(
+        set(data.index.get_level_values(block_level_name))
+    )  # Get unique blocks
     blocks.sort()
 
     # Initialize vertical offset for plotting
@@ -281,7 +283,9 @@ def plot_callback_raster_multiblock(
     # Plot data for each block
     for block in blocks:
         block_locs.append(y_offset)  # Store y-position of the current block
-        data_block = data.xs(key=block, level=block_level_name)  # Get data for the current block
+        data_block = data.xs(
+            key=block, level=block_level_name
+        )  # Get data for the current block
 
         # Plot raster for this block using the `plot_callback_raster` function
         plot_callback_raster(
