@@ -11,6 +11,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 from matplotlib.collections import LineCollection
 
+
 def segment_breaths(
     breathing_unfilt,
     fs,
@@ -25,7 +26,7 @@ def segment_breaths(
     Segments a raw breathing signal into inspiration and expiration phases.
 
     The function filters the input signal and identifies the onsets of inspiration and expiration
-    phases based on a threshold function applied to the filtered signal. Alternatively, threshold 
+    phases based on a threshold function applied to the filtered signal. Alternatively, threshold
     function can be set separately for inspiration and expiration. The function returns the frame
     indices of the detected transitions (where 0 is first audio frame).
 
@@ -173,7 +174,9 @@ def plot_breath_callback_trial(
 
     if len(ii_breaths) > 0:
         if y_breath_labels == "infer":
-            br2fr = lambda t_br: min((fs * (t_br + st_s)).astype(int), len(breath)-1)  # rounding might take slightly out of range
+            br2fr = lambda t_br: min(
+                (fs * (t_br + st_s)).astype(int), len(breath) - 1
+            )  # rounding might take slightly out of range
 
             y_func = lambda br: breath[br2fr(br)]
 
@@ -188,8 +191,12 @@ def plot_breath_callback_trial(
         ]
         colors = [color_dict[t] for t in np.array(stim_trial["call_types"])[ii_breaths]]
 
-        lc = LineCollection(arcs, colors=colors,linewidths=4,
-                    alpha=0.5,)
+        lc = LineCollection(
+            arcs,
+            colors=colors,
+            linewidths=4,
+            alpha=0.5,
+        )
         ax.add_collection(lc)
 
     ax.set(
@@ -197,6 +204,113 @@ def plot_breath_callback_trial(
         xlabel="Time, stim-aligned (s)",
         ylabel="Breath pressure (raw)",
         ylim=ylims,
+    )
+
+    return ax
+
+
+def plot_amplitude_dist(
+    breath,
+    ax=None,
+    binwidth=100,
+    leftmost=None,
+    rightmost=None,
+):
+    """
+    Plots a histogram of the amplitude distribution from the provided data and overlays statistical lines.
+
+    Parameters:
+    -----------
+    breath : array-like
+        A 1D array or list of numerical values representing the breath data (or any other data representing amplitude values) to be plotted.
+
+    ax : matplotlib.axes.Axes, optional
+        An optional `matplotlib` Axes object to plot the histogram. If not provided, a new `matplotlib` figure and axis are created.
+
+    binwidth : int, optional
+        The width of each bin for the histogram. Default is 100.
+
+    leftmost : int or float, optional
+        The leftmost boundary for the histogram bins. If not provided, it is set to two times the `binwidth` smaller than the minimum value of `breath`.
+
+    rightmost : int or float, optional
+        The rightmost boundary for the histogram bins. If not provided, it is set to two times the `binwidth` larger than the maximum value of `breath`.
+
+    Returns:
+    --------
+    ax : matplotlib.axes.Axes
+        The `matplotlib` Axes object containing the histogram plot, including statistical lines for percentiles and multiples of the median.
+
+    Description:
+    ------------
+    This function generates a histogram of the distribution of `breath` data using a specified bin width. It also overlays the following additional information:
+
+    - Percentiles: Vertical dashed lines representing the 25th and 75th percentiles of the `breath` data.
+    - Median multiples: Vertical dotted lines representing multiples of the median value of `breath` (1x, 1.5x, and 2x).
+
+    The histogram is normalized (`density=True`) to show a probability density rather than raw counts. The additional statistical lines help to visualize the distribution of the data in relation to its central tendency and spread.
+
+    Example Usage:
+    --------------
+    ```python
+    import matplotlib.pyplot as plt
+    import numpy as np
+
+    # Example data
+    breath_data = np.random.normal(0, 1, 1000)
+
+    # Create plot
+    fig, ax = plt.subplots()
+    plot_amplitude_dist(breath_data, ax=ax)
+
+    # Show plot
+    plt.show()
+    ```
+
+    Notes:
+    ------
+    - The function automatically determines the histogram boundaries unless explicitly provided via `leftmost` and `rightmost`.
+    - The median lines are plotted at multiples of the median of the `breath` data, specifically at 1, 1.5, and 2 times the median value.
+    """
+
+    if ax is None:
+        fig, ax = plt.subplots()
+
+    if leftmost is None:
+        leftmost = min(breath) - 2 * binwidth
+
+    if rightmost is None:
+        rightmost = max(breath) + 2 * binwidth
+
+    hist, edges = np.histogram(
+        breath, bins=np.arange(leftmost, rightmost, binwidth), density=True
+    )
+
+    ax.stairs(hist, edges, fill=True)
+
+    # 25 & 75th percentile: black lines
+    ax.vlines(
+        x=[np.percentile(breath, p) for p in (25, 75)],
+        ymin=0,
+        ymax=max(hist),
+        color="k",
+        linestyles="--",
+        alpha=0.5,
+        zorder=3,
+        label="p25 & p75",
+    )
+
+    median_multiples = (1, 1.5, 2)
+    # median & multiples: red lines
+    ax.vlines(
+        x=[q * np.median(breath) for q in median_multiples],
+        ymin=0,
+        ymax=max(hist),
+        color="r",
+        linestyles=":",
+        alpha=0.5,
+        zorder=3,
+        label=f"median * {median_multiples}",
     )
 
     return ax
