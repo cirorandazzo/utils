@@ -215,6 +215,8 @@ def plot_amplitude_dist(
     binwidth=100,
     leftmost=None,
     rightmost=None,
+    percentiles = (25, 75),
+    median_multiples = (1, 1.5, 2),
 ):
     """
     Plots a histogram of the amplitude distribution from the provided data and overlays statistical lines.
@@ -235,6 +237,12 @@ def plot_amplitude_dist(
 
     rightmost : int or float, optional
         The rightmost boundary for the histogram bins. If not provided, it is set to two times the `binwidth` larger than the maximum value of `breath`.
+
+    Percentiles : iterable of numeric, optional.
+        Plots percentiles of data as vertical black lines on distribution. Does not plot if median_multiples is None or an empty list. Default: None.
+
+    median_multiples : iterable of numeric, optional.
+        Plots multiples of median as vertical red lines on distribution. Does not plot if median_multiples is None or an empty list. Default: None.
 
     Returns:
     --------
@@ -288,29 +296,29 @@ def plot_amplitude_dist(
 
     ax.stairs(hist, edges, fill=True)
 
-    # 25 & 75th percentile: black lines
-    ax.vlines(
-        x=[np.percentile(breath, p) for p in (25, 75)],
-        ymin=0,
-        ymax=max(hist),
-        color="k",
-        linestyles="--",
-        alpha=0.5,
-        zorder=3,
-        label="p25 & p75",
-    )
+    if percentiles is not None and len(percentiles) > 0:
+        ax.vlines(
+            x=[np.percentile(breath, p) for p in percentiles],
+            ymin=0,
+            ymax=max(hist),
+            color="k",
+            linestyles="--",
+            alpha=0.5,
+            zorder=3,
+            label=f"percentile(s): {percentiles}",
+        )
 
-    median_multiples = (1, 1.5, 2)
-    # median & multiples: red lines
-    ax.vlines(
-        x=[q * np.median(breath) for q in median_multiples],
-        ymin=0,
-        ymax=max(hist),
-        color="r",
-        linestyles=":",
-        alpha=0.5,
-        zorder=3,
-        label=f"median * {median_multiples}",
-    )
+    if median_multiples is not None and len(median_multiples) > 0:
+        # median & multiples: red lines
+        ax.vlines(
+            x=[q * np.median(breath) for q in median_multiples],
+            ymin=0,
+            ymax=max(hist),
+            color="r",
+            linestyles=":",
+            alpha=0.5,
+            zorder=3,
+            label=f"median * {median_multiples}",
+        )
 
     return ax
