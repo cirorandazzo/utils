@@ -7,6 +7,11 @@
 # recenter based on mean(pre-stim breaths)
 
 import numpy as np
+from scipy.signal import find_peaks, peak_prominences
+from scipy.stats import gaussian_kde
+
+import matplotlib.pyplot as plt
+from matplotlib.collections import LineCollection
 
 
 def segment_breaths(
@@ -23,7 +28,7 @@ def segment_breaths(
     Segments a raw breathing signal into inspiration and expiration phases.
 
     The function filters the input signal and identifies the onsets of inspiration and expiration
-    phases based on a threshold function applied to the filtered signal. Alternatively, threshold 
+    phases based on a threshold function applied to the filtered signal. Alternatively, threshold
     function can be set separately for inspiration and expiration. The function returns the frame
     indices of the detected transitions (where 0 is first audio frame).
 
@@ -129,37 +134,36 @@ def make_notmat_vars(
 
 
 def plot_breath_callback_trial(
-    audio,
+    breath,
     fs,
     stim_trial,
     y_breath_labels,
     pre_time_s,
     post_time_s,
     ylims,
-    st,
-    en,
+    st_s,
+    en_s,
     ax=None,
     color_dict={"exp": "r", "insp": "b"},
 ):
-    import matplotlib.pyplot as plt
 
     if ax is None:
         fig, ax = plt.subplots(figsize=(10, 5))
 
     # indices of waveform segment
-    ii_audio = (np.array([st - pre_time_s, st + post_time_s]) * fs).astype(int)
+    ii_audio = (np.array([st_s - pre_time_s, st_s + post_time_s]) * fs).astype(int)
 
-    if ii_audio[1] >= len(audio):
-        ii_audio[1] = len(audio)
+    if ii_audio[1] >= len(breath):
+        ii_audio[1] = len(breath)
 
     # plot waveform
-    y = audio[np.arange(*ii_audio)]
+    y = breath[np.arange(*ii_audio)]
     x = (np.arange(len(y)) / 44100) - pre_time_s
     ax.plot(x, y, color="k", linewidth=0.5, label="breath")
 
     # plot trial onset/offset (start of this stim & next stim)
     ax.vlines(
-        x=[0, en - st],
+        x=[0, en_s - st_s],
         ymin=ylims[0],
         ymax=ylims[1],
         color="g",
@@ -171,16 +175,31 @@ def plot_breath_callback_trial(
     ii_breaths = [c in ["exp", "insp"] for c in stim_trial["call_types"]]
 
     if len(ii_breaths) > 0:
-        ax.hlines(
-            y=np.ones(sum(ii_breaths)) * y_breath_labels,
-            xmin=stim_trial["call_times_stim_aligned"][ii_breaths, 0],
-            xmax=stim_trial["call_times_stim_aligned"][ii_breaths, 1],
-            colors=[
-                color_dict[t] for t in np.array(stim_trial["call_types"])[ii_breaths]
-            ],
+        if y_breath_labels == "infer":
+            br2fr = lambda t_br: min(
+                (fs * (t_br + st_s)).astype(int), len(breath) - 1
+            )  # rounding might take slightly out of range
+
+            y_func = lambda br: breath[br2fr(br)]
+
+        else:
+            y_func = lambda br: y_breath_labels
+
+        arcs = [
+            np.array([[br_st, y_func(br_st)], [br_en, y_func(br_en)]])
+            for br_st, br_en in np.array(stim_trial["call_times_stim_aligned"])[
+                ii_breaths
+            ]
+        ]
+        colors = [color_dict[t] for t in np.array(stim_trial["call_types"])[ii_breaths]]
+
+        lc = LineCollection(
+            arcs,
+            colors=colors,
             linewidths=4,
             alpha=0.5,
         )
+        ax.add_collection(lc)
 
     ax.set(
         xlim=[-1 * pre_time_s, post_time_s],
@@ -188,5 +207,174 @@ def plot_breath_callback_trial(
         ylabel="Breath pressure (raw)",
         ylim=ylims,
     )
+
+    return ax
+
+
+def fit_breath_distribution(breath, kde_points=100):
+    """
+    For a breath waveform, constructs a smoothed distribution using a Kernel Density Estimate (KDE), extracts the inspiratory and expiratory peaks, then takes zero point threshold as the trough between those peaks.
+
+    The function identifies the two most prominent peaks in the pressure amplitude distribution of a breath waveform, and the minimum (trough) value between those peaks. Additionally, it returns a spline fit of the pressure distribution.
+
+    Parameters:
+    ----------
+    breath : array-like
+        The breath waveform data (pressure amplitude distribution).
+
+    kde_points : int, optional, default=100
+        The number of points used for generating the Kernel Density Estimate (KDE) distribution.
+
+    Returns:
+    -------
+    x_dist : ndarray
+        The x-values of the KDE distribution, representing the pressure values over the
+        given range of the breath waveform.
+
+    dist_kde : ndarray
+        The smoothed distribution (KDE) of the pressure amplitude over `x_dist`.
+
+    trough_ii : int
+        The index of the minimum value (trough) between the two most prominent peaks in the
+        pressure distribution.
+
+    amplitude_ii : list of int
+        The indices of the two most prominent peaks in the pressure distribution (inspiratory
+        and expiratory peaks).
+    """
+
+    # Generate evenly spaced x-values covering the range of the breath data
+    x_dist = np.linspace(breath.min(), breath.max(), kde_points)
+
+    # Perform Kernel Density Estimation (KDE) to create a smooth distribution
+    kde = gaussian_kde(breath)
+    dist_kde = kde(x_dist)
+
+    # Identify the indices of all peaks in the KDE distribution
+    peak_indices = find_peaks(dist_kde)[0]
+
+    # Compute the prominence of each peak
+    prominences = peak_prominences(dist_kde, peak_indices)[0]
+
+    # Select the two most prominent peaks
+    amplitude_ii = sorted(peak_indices[np.argsort(prominences)][-2:])
+
+    # Find the trough (minimum) between the two peaks
+    trough_ii = amplitude_ii[0] + np.argmin(dist_kde[np.arange(*amplitude_ii)])
+
+    return x_dist, dist_kde, trough_ii, amplitude_ii
+
+
+def plot_amplitude_dist(
+    breath,
+    ax=None,
+    binwidth=100,
+    leftmost=None,
+    rightmost=None,
+    percentiles=(25, 75),
+    median_multiples=(1, 1.5, 2),
+):
+    """
+    Plots a histogram of the amplitude distribution from the provided data and overlays statistical lines.
+
+    Parameters:
+    -----------
+    breath : array-like
+        A 1D array or list of numerical values representing the breath data (or any other data representing amplitude values) to be plotted.
+
+    ax : matplotlib.axes.Axes, optional
+        An optional `matplotlib` Axes object to plot the histogram. If not provided, a new `matplotlib` figure and axis are created.
+
+    binwidth : int, optional
+        The width of each bin for the histogram. Default is 100.
+
+    leftmost : int or float, optional
+        The leftmost boundary for the histogram bins. If not provided, it is set to two times the `binwidth` smaller than the minimum value of `breath`.
+
+    rightmost : int or float, optional
+        The rightmost boundary for the histogram bins. If not provided, it is set to two times the `binwidth` larger than the maximum value of `breath`.
+
+    Percentiles : iterable of numeric, optional.
+        Plots percentiles of data as vertical black lines on distribution. Does not plot if median_multiples is None or an empty list. Default: None.
+
+    median_multiples : iterable of numeric, optional.
+        Plots multiples of median as vertical red lines on distribution. Does not plot if median_multiples is None or an empty list. Default: None.
+
+    Returns:
+    --------
+    ax : matplotlib.axes.Axes
+        The `matplotlib` Axes object containing the histogram plot, including statistical lines for percentiles and multiples of the median.
+
+    Description:
+    ------------
+    This function generates a histogram of the distribution of `breath` data using a specified bin width. It also overlays the following additional information:
+
+    - Percentiles: Vertical dashed lines representing the 25th and 75th percentiles of the `breath` data.
+    - Median multiples: Vertical dotted lines representing multiples of the median value of `breath` (1x, 1.5x, and 2x).
+
+    The histogram is normalized (`density=True`) to show a probability density rather than raw counts. The additional statistical lines help to visualize the distribution of the data in relation to its central tendency and spread.
+
+    Example Usage:
+    --------------
+    ```python
+    import matplotlib.pyplot as plt
+    import numpy as np
+
+    # Example data
+    breath_data = np.random.normal(0, 1, 1000)
+
+    # Create plot
+    fig, ax = plt.subplots()
+    plot_amplitude_dist(breath_data, ax=ax)
+
+    # Show plot
+    plt.show()
+    ```
+
+    Notes:
+    ------
+    - The function automatically determines the histogram boundaries unless explicitly provided via `leftmost` and `rightmost`.
+    - The median lines are plotted at multiples of the median of the `breath` data, specifically at 1, 1.5, and 2 times the median value.
+    """
+
+    if ax is None:
+        fig, ax = plt.subplots()
+
+    if leftmost is None:
+        leftmost = min(breath) - 2 * binwidth
+
+    if rightmost is None:
+        rightmost = max(breath) + 2 * binwidth
+
+    hist, edges = np.histogram(
+        breath, bins=np.arange(leftmost, rightmost, binwidth), density=True
+    )
+
+    ax.stairs(hist, edges, fill=True)
+
+    if percentiles is not None and len(percentiles) > 0:
+        ax.vlines(
+            x=[np.percentile(breath, p) for p in percentiles],
+            ymin=0,
+            ymax=max(hist),
+            color="k",
+            linestyles="--",
+            alpha=0.5,
+            zorder=3,
+            label=f"percentile(s): {percentiles}",
+        )
+
+    if median_multiples is not None and len(median_multiples) > 0:
+        # median & multiples: red lines
+        ax.vlines(
+            x=[q * np.median(breath) for q in median_multiples],
+            ymin=0,
+            ymax=max(hist),
+            color="r",
+            linestyles=":",
+            alpha=0.5,
+            zorder=3,
+            label=f"median * {median_multiples}",
+        )
 
     return ax
