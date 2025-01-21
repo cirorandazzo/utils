@@ -271,8 +271,8 @@ def plot_amplitude_dist(
     binwidth=100,
     leftmost=None,
     rightmost=None,
-    percentiles = (25, 75),
-    median_multiples = (1, 1.5, 2),
+    percentiles=(25, 75),
+    median_multiples=(1, 1.5, 2),
 ):
     """
     Plots a histogram of the amplitude distribution from the provided data and overlays statistical lines.
