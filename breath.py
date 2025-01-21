@@ -211,24 +211,58 @@ def plot_breath_callback_trial(
     return ax
 
 
-def get_amplitude_distr(breath, kde_points=100):
+def fit_breath_distribution(breath, kde_points=100):
+    """
+    For a breath waveform, constructs a smoothed distribution using a Kernel Density Estimate (KDE), extracts the inspiratory and expiratory peaks, then takes zero point threshold as the trough between those peaks.
+
+    The function identifies the two most prominent peaks in the pressure amplitude distribution of a breath waveform, and the minimum (trough) value between those peaks. Additionally, it returns a spline fit of the pressure distribution.
+
+    Parameters:
+    ----------
+    breath : array-like
+        The breath waveform data (pressure amplitude distribution).
+
+    kde_points : int, optional, default=100
+        The number of points used for generating the Kernel Density Estimate (KDE) distribution.
+
+    Returns:
+    -------
+    x_dist : ndarray
+        The x-values of the KDE distribution, representing the pressure values over the
+        given range of the breath waveform.
+
+    dist_kde : ndarray
+        The smoothed distribution (KDE) of the pressure amplitude over `x_dist`.
+
+    trough_ii : int
+        The index of the minimum value (trough) between the two most prominent peaks in the
+        pressure distribution.
+
+    amplitude_ii : list of int
+        The indices of the two most prominent peaks in the pressure distribution (inspiratory
+        and expiratory peaks).
+    """
+
+    # Generate evenly spaced x-values covering the range of the breath data
     x_dist = np.linspace(breath.min(), breath.max(), kde_points)
+
+    # Perform Kernel Density Estimation (KDE) to create a smooth distribution
     kde = gaussian_kde(breath)
     dist_kde = kde(x_dist)
 
-    x_peaks = find_peaks(dist_kde)[0]
+    # Identify the indices of all peaks in the KDE distribution
+    peak_indices = find_peaks(dist_kde)[0]
 
-    prominences = peak_prominences(dist_kde, x_peaks)[0]
+    # Compute the prominence of each peak
+    prominences = prominences(dist_kde, peak_indices)[0]
 
-    peaks = sorted(
-        x_peaks[np.argsort(prominences)][-2:]
-    )  # get indices of 2 most prominent peaks.
+    # Select the two most prominent peaks
+    amplitude_ii = sorted(peak_indices[np.argsort(prominences)][-2:])
 
-    trough = peaks[0] + np.argmin(
-        dist_kde[np.arange(*peaks)]
-    )  # location of minimum value between these points
+    # Find the trough (minimum) between the two peaks
+    trough_ii = amplitude_ii[0] + np.argmin(dist_kde[np.arange(*amplitude_ii)])
 
-    return x_dist, dist_kde, trough, peaks
+    return x_dist, dist_kde, trough_ii, amplitude_ii
 
 
 def plot_amplitude_dist(
