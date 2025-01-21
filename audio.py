@@ -1,5 +1,12 @@
 import numpy as np
+from scipy.io import wavfile
+from scipy.signal import butter, filtfilt, ShortTimeFFT
+from scipy.signal.windows import hamming
+from sklearn.preprocessing import minmax_scale
 
+import matplotlib.pyplot as plt
+
+from .evfuncs import load_cbin
 
 class AudioObject:
     def __init__(
@@ -13,7 +20,6 @@ class AudioObject:
         """
         b,a: Numerator (b) and denominator (a) polynomials of the IIR filter
         """
-        import numpy as np
 
         self.audio = audio
         self.fs = fs
@@ -47,8 +53,6 @@ class AudioObject:
 
         Args should match default constructor.
         """
-        import numpy as np
-        from scipy.io import wavfile
 
         fs, audio = wavfile.read(filename)
 
@@ -96,7 +100,6 @@ class AudioObject:
 
         Args should match default constructor.
         """
-        from .evfuncs import load_cbin
 
         audio, fs = load_cbin(filename, channel=channel)
 
@@ -111,20 +114,14 @@ class AudioObject:
         return new_obj
 
     def filtfilt(self, b, a):
-        from scipy.signal import filtfilt
-
         self.audio_filt = filtfilt(b, a, self.audio)
 
     def filtfilt_butter_default(self, f_low=500, f_high=15000, poles=8):
-        from scipy.signal import butter
-
         b, a = butter(poles, [f_low, f_high], btype="bandpass", fs=self.fs)
 
         self.filtfilt(b, a)
 
     def rectify_smooth(self, smooth_window_f):
-        import numpy as np
-
         if self.audio_filt is None:
             raise UnfilteredException()
 
@@ -144,9 +141,6 @@ class AudioObject:
         overlap=1020,
         normalize_range=(0, 1),
     ):
-        from scipy.signal.windows import hamming
-        from scipy.signal import ShortTimeFFT
-
         if self.audio_filt is None:
             raise UnfilteredException()
 
@@ -201,9 +195,6 @@ def plot_spectrogram(
     x_offset_s=0,
     **plot_kwargs,
 ):
-    import matplotlib.pyplot as plt
-    import numpy as np
-
     if ax is None:
         fig, ax = plt.subplots()
 
@@ -231,8 +222,6 @@ def plot_spectrogram(
 
 
 def normalize(x, range=(-1, 1)):
-    from sklearn.preprocessing import minmax_scale
-
     flattened = minmax_scale(x.flatten(), feature_range=range).astype("float32")
     return flattened.reshape(x.shape)
 
