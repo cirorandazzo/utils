@@ -265,6 +265,20 @@ def fit_breath_distribution(breath, kde_points=100):
     return x_dist, dist_kde, trough_ii, amplitude_ii
 
 
+def get_kde_threshold(breath, **fit_kwargs):
+    """
+    Wrapper of fit_breath_distribution which directly returns spline-fit threshold given a breath waveform. E.g., useful for passing as `centering` function into segment_breaths.
+    """
+
+    x_dist, dist_kde, trough_ii, amplitude_ii = fit_breath_distribution(
+        breath, **fit_kwargs
+    )
+
+    threshold = dist_kde[trough_ii]
+
+    return threshold
+
+
 def plot_amplitude_dist(
     breath,
     ax=None,
