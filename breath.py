@@ -7,6 +7,8 @@
 # recenter based on mean(pre-stim breaths)
 
 import numpy as np
+from scipy.signal import find_peaks, peak_prominences
+from scipy.stats import gaussian_kde
 
 import matplotlib.pyplot as plt
 from matplotlib.collections import LineCollection
@@ -207,6 +209,26 @@ def plot_breath_callback_trial(
     )
 
     return ax
+
+
+def get_amplitude_distr(breath, kde_points=100):
+    x_dist = np.linspace(breath.min(), breath.max(), kde_points)
+    kde = gaussian_kde(breath)
+    dist_kde = kde(x_dist)
+
+    x_peaks = find_peaks(dist_kde)[0]
+
+    prominences = peak_prominences(dist_kde, x_peaks)[0]
+
+    peaks = sorted(
+        x_peaks[np.argsort(prominences)][-2:]
+    )  # get indices of 2 most prominent peaks.
+
+    trough = peaks[0] + np.argmin(
+        dist_kde[np.arange(*peaks)]
+    )  # location of minimum value between these points
+
+    return x_dist, dist_kde, trough, peaks
 
 
 def plot_amplitude_dist(
