@@ -254,7 +254,7 @@ def fit_breath_distribution(breath, kde_points=100):
     peak_indices = find_peaks(dist_kde)[0]
 
     # Compute the prominence of each peak
-    prominences = prominences(dist_kde, peak_indices)[0]
+    prominences = peak_prominences(dist_kde, peak_indices)[0]
 
     # Select the two most prominent peaks
     amplitude_ii = sorted(peak_indices[np.argsort(prominences)][-2:])
