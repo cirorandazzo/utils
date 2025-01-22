@@ -35,7 +35,13 @@ class NumpyEncoder(json.JSONEncoder):
         return super().default(obj)
 
 
-def merge_json(records, extant_records, dict_fields={}, fields_to_remove=()):
+def merge_json(
+    records,
+    extant_records,
+    dict_fields={},
+    fields_to_remove=(),
+    keep_extant_fields=True,
+):
     """
     Merges new records into an existing set of records.
 
@@ -58,6 +64,9 @@ def merge_json(records, extant_records, dict_fields={}, fields_to_remove=()):
 
     fields_to_remove : tuple, optional, default=()
         A tuple of field names that should be removed from all records.
+
+    keep_extant_fields : bool, optional, default=True
+        Behavior on fields in extant_records but not in records. If True, keeps these fields. If False, deletes these fields.
 
     Returns:
     -------
@@ -94,7 +103,10 @@ def merge_json(records, extant_records, dict_fields={}, fields_to_remove=()):
             except KeyError:
                 pass  # Ignore if the field doesn't exist in the record
 
-        # Overwrite the record in extant_records with the updated data
-        extant_records[id] = data
+        if keep_extant_fields:  # overwrite changed fields, but keep fields not in data
+            extant_records[id] = {**extant_records[id], **data}
+            data[fieldname] = {**extant_data_field, **data[fieldname]}
+        else: # Overwrite the record in extant_records with updated data
+            extant_records[id] = data
 
     return extant_records
