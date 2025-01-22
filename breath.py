@@ -274,7 +274,7 @@ def get_kde_threshold(breath, **fit_kwargs):
         breath, **fit_kwargs
     )
 
-    threshold = dist_kde[trough_ii]
+    threshold = x_dist[trough_ii]
 
     return threshold
 
