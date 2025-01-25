@@ -405,6 +405,49 @@ def get_first_breath_segment(
     return_stim_aligned=True,
     return_unit="samples",
 ):
+    """
+    Returns the onset and offset of the first instance of a specified 'breath_type' call after a given
+    earliest allowed onset, optionally adding a buffer. The result can be returned in different units
+    (samples, frames, seconds, or milliseconds) and optionally adjusted for the stimulus-aligned time.
+
+    Parameters:
+    -----------
+    trial : dict
+        The trial data containing 'call_types' and 'call_times_stim_aligned'.
+    breath_type : str
+        The type of breath (or call) to search for.
+    fs : float
+        The sampling frequency (samples per second) of the audio data.
+    earliest_allowed_onset : float, optional
+        The earliest allowed onset time (in seconds) after stimulus presentation for the breath type to occur. Default is None.
+    buffer_s : float, optional
+        The amount of time (in seconds) to extend both the onset and offset of the detected breath. Default is 0.
+    return_stim_aligned : bool, optional
+        Whether to return the time in stimulus-aligned units. If False, the time is adjusted by the trial start time. Default is True.
+    return_unit : str, optional
+        The unit to return the onset and offset times in. Options are "samples", "frames", "seconds", or "milliseconds". Default is "samples".
+
+    Returns:
+    --------
+    numpy.ndarray
+        A 2-element array containing the onset and offset of the first matching breath type call,
+        adjusted for the buffer and in the requested unit. Returns np.nan if no such call is found.
+
+    Raises:
+    -------
+    ValueError
+        If an invalid unit is provided in the `return_unit` parameter.
+
+    Notes:
+    ------
+    - If no breath of the specified type is found after the `earliest_allowed_onset`, a warning is raised and np.nan is returned.
+    - The resulting onset and offset times are either in stimulus-aligned or trial time, depending on `return_stim_aligned`.
+    - The time is adjusted by the specified `buffer_s` and converted to the requested unit (`samples`, `frames`, `seconds`, or `ms`).
+
+    Example:
+    --------
+    get_first_breath_segment(trial, 'inhalation', fs=1000, earliest_allowed_onset=1.0, buffer_s=0.5, return_unit='seconds')
+    """
 
     # select call type of interest
     ii_breath_type = np.array(trial["call_types"]) == breath_type
