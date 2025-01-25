@@ -6,6 +6,8 @@
 # roughly segment (w/ insp/exp threshold)
 # recenter based on mean(pre-stim breaths)
 
+import warnings
+
 import numpy as np
 from scipy.signal import find_peaks, peak_prominences
 from scipy.stats import gaussian_kde
@@ -392,3 +394,54 @@ def plot_amplitude_dist(
         )
 
     return ax
+
+
+def get_first_breath_segment(
+    trial,
+    breath_type,
+    fs,
+    earliest_allowed_onset=None,
+    buffer_s=0,
+    return_stim_aligned=True,
+    return_unit="samples",
+):
+
+    # select call type of interest
+    ii_breath_type = np.array(trial["call_types"]) == breath_type
+
+    # get onsets & offsets
+    breath_times = trial["call_times_stim_aligned"][ii_breath_type, :]
+
+    # reject calls that are too early
+    if earliest_allowed_onset is not None:
+        breath_times = breath_times[breath_times[:, 0] >= earliest_allowed_onset]
+
+    if len(breath_times) == 0:
+        warnings.warn(
+            f"No calls of type `{breath_type}` found after `{earliest_allowed_onset}s post-stimulus`."
+        )
+        return np.nan
+
+    # get earliest matching call in samples
+    i_earliest_onset = breath_times[:, 0].argmin()
+
+    earliest_call = breath_times[i_earliest_onset, :]
+
+    if not return_stim_aligned:
+        earliest_call += trial["trial_start_s"]
+
+    # add buffer
+    earliest_call[0] -= buffer_s
+    earliest_call[1] += buffer_s
+
+    # convert to requested unit
+    if return_unit in ["samples", "frames"]:
+        earliest_call = (earliest_call * fs).astype(int)
+    elif return_unit in ["seconds"]:
+        pass
+    elif return_unit in ["milliseconds", "ms"]:
+        earliest_call = earliest_call / 1000
+    else:
+        raise ValueError(f"Unknown unit: {return_unit}")
+
+    return earliest_call
