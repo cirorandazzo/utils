@@ -4,6 +4,7 @@ import numpy as np
 import pandas as pd
 
 import matplotlib.pyplot as plt
+from matplotlib.colors import ListedColormap, to_rgba
 
 import hdbscan
 
@@ -46,13 +47,14 @@ def loc_relative(wav_filename, calls_index, df, field="index", i=1, default=None
 def plot_embedding_data(
     embedding,
     embedding_name,
-    df,
+    df=None,
     ax=None,
     plot_type="putative_call",
     show_colorbar=True,
     cmap_name=None,
     scatter_kwargs=None,
     set_kwargs=None,
+    set_bad=None,
     **kwargs,
 ):
     """
@@ -84,6 +86,15 @@ def plot_embedding_data(
             ylabel="UMAP2",
         )
 
+    if set_bad is None:
+        set_bad = dict(
+            c="k",
+            alpha=0.2,
+        )
+
+    if isinstance(set_bad, dict):
+        set_bad = to_rgba(**set_bad)
+
     set_kwargs = {**set_kwargs}  # copy set_kwargs; don't modify input
 
     if "title" not in set_kwargs.keys():
@@ -98,6 +109,7 @@ def plot_embedding_data(
             "bird_id": "Set2",
             "insp_onset": "RdYlGn",
             "insp_offset": "magma_r",
+            "clusters": "jet",
         }
 
         cmap_name = default_cmaps.get(plot_type, "viridis")
@@ -107,7 +119,7 @@ def plot_embedding_data(
         # manually defined color labels
         plot_type_kwargs = dict(
             c=kwargs.pop("c"),
-            cmap=cmap_name,
+            cmap=plt.get_cmap(cmap_name),
         )
 
     elif plot_type == "putative_call":
@@ -125,7 +137,7 @@ def plot_embedding_data(
     elif plot_type == "amplitude":
         plot_type_kwargs = dict(
             c=df.amplitude,
-            cmap=cmap_name,
+            cmap=plt.get_cmap(cmap_name),
         )
         cbar_label = "amplitude (normalized)"
 
@@ -143,7 +155,7 @@ def plot_embedding_data(
 
         plot_type_kwargs = dict(
             c=c,
-            cmap=cmap_name,
+            cmap=plt.get_cmap(cmap_name),
             vmax=1000,
         )
         cbar_label = "duration (ms)"
@@ -154,7 +166,7 @@ def plot_embedding_data(
 
         n_since_stim = df["trial_index"].fillna(-1)
         cmap = plt.get_cmap(cmap_name, n_breaths+1)
-        cmap.set_bad("k")
+        cmap.set_bad(set_bad)
 
         plot_type_kwargs = dict(
             c=np.ma.masked_equal(n_since_stim, -1),
@@ -201,18 +213,45 @@ def plot_embedding_data(
             )
 
         elif plot_type == "insp_offset":
-            plot_type_kwargs = dict(c=all_insps[1, :], cmap=cmap_name)
+            plot_type_kwargs = dict(c=all_insps[1, :], cmap=plt.get_cmap(cmap_name))
 
         else:
             raise KeyError("Invalid plot type. How'd you even get here?")
 
         cbar_label = f"{plot_type} (ms, stim_aligned)"
 
+    elif plot_type in ["clusters", "cluster", "clusterer"]:
+        assert "clusterer" in kwargs.keys(), "clusterer must be provided as kwarg for 'clusters' plot type."
+        clusterer = kwargs.pop("clusterer")
+
+        cmap = plt.get_cmap(cmap_name, np.unique(clusterer.labels_).size)
+
+        vmin = min(clusterer.labels_)
+        vmax = max(clusterer.labels_) + 1
+        n = vmax - vmin
+
+        try:
+            masked_clusters = kwargs.pop("masked_clusters")
+        except KeyError as e:
+            masked_clusters = [-1]  # mask hdbscan noise cluster by default
+
+        ii_masked = np.isin(np.arange(vmin, vmax), masked_clusters)
+
+        cmap = plt.get_cmap(cmap_name, n)
+        colors = cmap(np.linspace(0, 1, n))
+        colors[ii_masked] = set_bad
+
+        plot_type_kwargs = dict(
+            c=clusterer.labels_,
+            cmap=ListedColormap(colors),
+        )
+        cbar_label = "cluster"
     else:
         raise ValueError(f"Unsupported plot type: {plot_type}")
 
     # overwrite default kwargs with user input
     plot_type_kwargs = {**plot_type_kwargs, **kwargs}
+    plot_type_kwargs["cmap"].set_bad(set_bad)
 
     # DO PLOTTING
     sc = ax.scatter(
