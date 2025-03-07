@@ -279,3 +279,228 @@ def plot_embedding_data(
         cbar.set_ticklabels(cbar_tick_labels)
 
     return ax
+
+
+def plot_cluster_traces_pipeline(
+    trace_type,
+    df,
+    fs,
+    clusterer,
+    padding_kwargs=None,
+    aligned_to=None,
+    select="all",
+    cluster_cmap=None,
+    set_kwargs=None,
+    **plot_kwargs,
+):
+    # =========GET TRACES=========#
+    # stack traces in a np array, padding or cutting as necessary
+    if padding_kwargs is None:
+        padding_kwargs = {}
+
+    traces, aligned_at_f = stack_traces(traces=df[trace_type], **padding_kwargs)
+
+    # select based on putative_call
+    traces, cluster_labels = select_traces(df, clusterer, traces, select)
+
+    # use full clusterer.labels_ to still plot empty clusters
+    cluster_data = {
+        i_cluster: traces[cluster_labels == i_cluster, :]
+        for i_cluster in np.unique(clusterer.labels_)
+    }
+
+    x, xlabel = get_trace_x(trace_type, traces.shape[1], fs, aligned_at_f, aligned_to)
+
+    default_set_kwargs = dict(
+        xlabel=xlabel,
+        ylabel="amplitude",
+        xlim=[x.min(), x.max()],
+        ylim=[traces.min(), traces.max()],
+    )
+
+    if set_kwargs is None:
+        set_kwargs = default_set_kwargs
+    else:
+        set_kwargs = {**default_set_kwargs, **set_kwargs}
+
+    # =========PLOT TRACES=========#
+    axs_cluster_traces = plot_cluster_traces(
+        cluster_data,
+        x,
+        select,
+        clusters_to_plot="all",
+        cmap=cluster_cmap,
+        all_labels=clusterer.labels_,
+        set_kwargs=set_kwargs,
+        **plot_kwargs,
+    )
+
+    return axs_cluster_traces
+
+
+def stack_traces(
+    traces,
+    pad_method=None,
+    max_length=None,
+    i_align=None,
+):
+    """
+    Stack traces in a DataFrame, padding or cutting as requested.
+    """
+
+    aligned_at = None
+
+    # === use traces as-is (requires same length)
+    if pad_method is None:
+        assert (
+            len(set(traces.apply(len))) == 1
+        ), "All traces must be the same length to run with `pad_method=None`!"
+
+    # === pad/cut at end (keep default alignment)
+    elif pad_method == "end":
+        if max_length is None:
+            max_length = max(traces.apply(len))
+
+        def pad_cut_end(x, max_length):
+            if len(x) > max_length:
+                return x[:max_length]
+            else:
+                return np.pad(x, [0, max_length - len(x)])
+
+        traces = traces.apply(pad_cut_end, max_length=max_length)
+
+        aligned_at = 0
+
+    # === pad/cut at beginning
+    elif pad_method == "beginning":
+        if max_length is None:
+            max_length = max(traces.apply(len))
+
+        def pad_cut_beginning(x, max_length):
+            if len(x) > max_length:
+                return x[-max_length:]
+            else:
+                return np.pad(x, [max_length - len(x), 0])
+
+        traces = traces.apply(pad_cut_beginning, max_length=max_length)
+
+        aligned_at = max_length
+
+    # === align to a certain point in each trace
+    elif pad_method in ["offset", "aligned", "index"]:
+
+        if max_length is None:
+            max_pre = max(i_align)
+            max_post = max(traces.apply(lambda x: len(x) - max_pre))
+        else:
+            assert len(max_length) == 2
+
+        max_pre, max_post = max_length
+
+        # TODO: cut if x is longer on one or both sides
+        traces = traces.apply(lambda x: np.pad(x, [max_pre, max_post]))
+
+        aligned_at = max_pre + 1
+
+    return (np.vstack(traces), aligned_at)
+
+
+def select_traces(all_breaths, clusterer, traces, select):
+    if select == "all":
+        ii_select = np.ones(len(all_breaths)).astype(bool)
+    elif select == "call":
+        ii_select = all_breaths["putative_call"]
+    elif select == "no call":
+        ii_select = ~all_breaths["putative_call"]
+    else:
+        raise ValueError(f"select={select} not recognized")
+
+    traces = traces[ii_select]
+    cluster_labels = clusterer.labels_[ii_select]
+    return traces, cluster_labels
+
+
+def get_trace_x(trace_type, trace_len_f, fs, aligned_at_f, aligned_to=None):
+    interpolated_types = ["breath_interpolated", "insp_interpolated"]
+
+    # === interpolated types: [0, 1]
+    if trace_type in interpolated_types:
+        x = np.linspace(0, 1, trace_len_f)
+        xlabel = "normalized duration"
+    # === time
+    else:
+        x = (np.arange(trace_len_f) - aligned_at_f) / fs * 1000
+        xlabel = "time (ms)"
+
+        if aligned_to is not None:
+            xlabel = f"{xlabel}, aligned to {aligned_to}"
+
+    return x, xlabel
+
+
+def plot_cluster_traces(
+    cluster_data,
+    x,
+    select,
+    clusters_to_plot="all",
+    set_kwargs=None,
+    cmap=None,
+    all_labels=None,
+    **plot_kwargs,
+):
+
+    # overwrite default plot_kwargs with user input
+    default_plot_kwargs = dict(
+        color="k",
+        alpha=0.2,
+        linewidth=0.5,
+    )
+    plot_kwargs = {**default_plot_kwargs, **plot_kwargs}
+
+    if set_kwargs is None:
+        set_kwargs = dict(
+            xlabel="time",
+            ylabel="amplitude",
+        )
+
+    if clusters_to_plot == "all":
+        clusters_to_plot = cluster_data.keys()
+
+    # predefine ax for each cluster
+    axs = {k: plt.subplots()[1] for k in clusters_to_plot}
+
+    for i_cluster in clusters_to_plot:
+        traces = cluster_data[i_cluster]
+        ax = axs[i_cluster]
+
+        # plot trials
+        ax.plot(
+            x,
+            traces.T,
+            **plot_kwargs,
+        )
+
+        # plot mean
+        ax.plot(x, traces.T.mean(axis=1), color="r", linewidth=1)
+
+        # title n
+        if select == "all" or all_labels is None:
+            n = f"{traces.shape[0]}"
+        else:
+            n = f"{traces.shape[0]}/{sum(all_labels == i_cluster)}"
+
+        # title color
+        if cmap is not None:
+            title_color = cmap(i_cluster)
+        else:
+            title_color = "k"
+
+        # set title, etc.
+        ax.set_title(
+            f"cluster {i_cluster} traces {select} (n={n})",
+            color=title_color,
+        )
+
+        ax.set(**set_kwargs)
+
+    return axs
