@@ -230,10 +230,17 @@ def plot_embedding_data(
         vmax = max(clusterer.labels_) + 1
         n = vmax - vmin
 
-        try:
+        hl = "highlighted_clusters" in kwargs.keys()
+        msk = "masked_clusters" in kwargs.keys()
+
+        if hl and msk:
+            raise ValueError("Provide either masked_clusters or highlighted_clusters, not both.")
+        elif hl:
+            masked_clusters = np.setdiff1d(np.arange(vmin, vmax), kwargs.pop("highlighted_clusters"))
+        elif msk:
             masked_clusters = kwargs.pop("masked_clusters")
-        except KeyError as e:
-            masked_clusters = [-1]  # mask hdbscan noise cluster by default
+        else:
+            masked_clusters = [-1] # mask hdbscan noise cluster by default
 
         ii_masked = np.isin(np.arange(vmin, vmax), masked_clusters)
 
