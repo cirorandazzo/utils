@@ -11,9 +11,17 @@ import hdbscan
 from .file import parse_birdname
 from .plot import remap_cmap
 
+
 def get_time_since_stim(x, all_trials):
     """
-    For each breath in all_trials, returns time since previous stimulus
+    Calculate the time since the previous stimulus for a breath trial x.
+
+    Parameters:
+    - x: Row in DataFrame that contains the breath info.
+    - all_trials: DataFrame containing the trial information.
+
+    Returns:
+    - Time since the previous stimulus if present, else pd.NA.
     """
     if pd.isna(x.stims_index):
         return pd.NA
@@ -23,9 +31,19 @@ def get_time_since_stim(x, all_trials):
 
 def loc_relative(wav_filename, calls_index, df, field="index", i=1, default=None):
     """
-    Fetch index or field of a breath segment relative to the inputted one.
+    Fetch the index or field of a breath segment relative to the inputted one.
+
+    Parameters:
+    - wav_filename: Filename of the audio file.
+    - calls_index: Index of the current call.
+    - df: DataFrame containing the breath segment data.
+    - field: The specific field to retrieve from the segment (default is "index").
+    - i: Relative index to retrieve (positive for future, negative for past).
+    - default: Default value if the field is not found.
+
+    Returns:
+    - The index or field value relative to the inputted one.
     """
-    # return value
     v = default
 
     try:
@@ -58,49 +76,48 @@ def plot_embedding_data(
     **kwargs,
 ):
     """
-    Function to plot different types of embeddings based on plot_type.
+    Plot embeddings colored according to specified plot type.
 
     Parameters:
+    - embedding: 2d data to plot (e.g., UMAP embedding).
     - embedding_name: Name of the embedding.
-    - df: DataFrame containing the metadata for cmap. Order should match embedding. Can be all_breaths or all_trials.
-    - scatter_kwargs: Keyword arguments for the scatter plot.
-    - set_kwargs: Settings for the plot (e.g., axis limits, labels).
-    - plot_type: Type of plot to generate ("putative_call", "amplitude", "duration", "time_since_stim").
-    - n_breaths: Number of breaths for the "time_since_stim" plot (default is 8).
-    """
+    - df: DataFrame containing metadata for color mapping. Order should match embedding. Can be all_breaths or all_trials.
+    - ax: The axis object to plot on. If None, a new figure is created.
+    - plot_type: Type of plot to generate (e.g., "putative_call", "amplitude", etc.). Deals with selecting relevant field from df & particulars of colormap.
+    - show_colorbar: Whether to display a colorbar.
+    - cmap_name: Colormap to use. Default is None, which uses a predefined mapping. You can alternatively pass an actual cmap to kwargs, maybe.
+    - scatter_kwargs: Additional arguments for the scatter plot.
+    - set_kwargs: Settings for plot appearance (e.g., axis labels).
+    - set_bad: Settings for "bad" values in the colormap (default is None). Also applies to masked clusters for cluster plot type.
+    - **kwargs: Additional keyword arguments for specific plot types.
 
+    Returns:
+    - The axis object containing the plot.
+    """
     x, y = [embedding[:, i] for i in [0, 1]]
 
     if ax is None:
         fig, ax = plt.subplots()
 
     if scatter_kwargs is None:
-        scatter_kwargs = dict(
-            s=.2,
-            alpha=0.5,
-        )
+        scatter_kwargs = dict(s=0.2, alpha=0.5)
 
     if set_kwargs is None:
-        set_kwargs = dict(
-            xlabel="UMAP1",
-            ylabel="UMAP2",
-        )
+        set_kwargs = dict(xlabel="UMAP1", ylabel="UMAP2")
 
     if set_bad is None:
-        set_bad = dict(
-            c="k",
-            alpha=0.2,
-        )
+        set_bad = dict(c="k", alpha=0.2)
 
     if isinstance(set_bad, dict):
         set_bad = to_rgba(**set_bad)
 
-    set_kwargs = {**set_kwargs}  # copy set_kwargs; don't modify input
+    set_kwargs = {**set_kwargs}  # Copy to avoid modifying input
 
     if "title" not in set_kwargs.keys():
         set_kwargs["title"] = f"{embedding_name}: {plot_type.upper()}"
 
     if cmap_name is None:
+        # Default colormaps based on plot type
         default_cmaps = {
             "putative_call": "Dark2_r",
             "amplitude": "magma_r",
@@ -111,16 +128,12 @@ def plot_embedding_data(
             "insp_offset": "magma_r",
             "clusters": "jet",
         }
-
         cmap_name = default_cmaps.get(plot_type, "viridis")
 
-    # GET PLOT TYPE SPEIFICS
+    # Plot specific handling based on plot_type
     if "c" in kwargs.keys():
-        # manually defined color labels
-        plot_type_kwargs = dict(
-            c=kwargs.pop("c"),
-            cmap=plt.get_cmap(cmap_name),
-        )
+        # Manually defined color labels
+        plot_type_kwargs = dict(c=kwargs.pop("c"), cmap=plt.get_cmap(cmap_name))
 
     elif plot_type == "putative_call":
         plot_type_kwargs = dict(
@@ -129,29 +142,30 @@ def plot_embedding_data(
             vmin=0,
             vmax=1,
         )
-
-        cbar_ticks = [.25, .75]
-        cbar_tick_labels = (["no_call", "call"])
+        cbar_ticks = [0.25, 0.75]
+        cbar_tick_labels = ["no_call", "call"]
         cbar_label = None
 
     elif plot_type == "amplitude":
-        plot_type_kwargs = dict(
-            c=df.amplitude,
-            cmap=plt.get_cmap(cmap_name),
-        )
+        plot_type_kwargs = dict(c=df.amplitude, cmap=plt.get_cmap(cmap_name))
         cbar_label = "amplitude (normalized)"
 
     elif plot_type == "duration":
+        # Calculate duration from either 'duration_s' or 'ii_first_insp' columns
         if "duration_s" in df.columns:
-            c = df.duration_s * 1000
+            c = df.duration_s * 1000  # Convert to ms
         elif "ii_first_insp" in df.columns:
             try:
                 all_insps = np.vstack(df["ii_first_insp"]).T / kwargs.pop("fs") * 1000
-            except KeyError as e:
-                raise KeyError("Pass fs as a kwarg to compute duration from column ii_first_insp")
+            except KeyError:
+                raise KeyError(
+                    "Pass fs as a kwarg to compute duration from column ii_first_insp"
+                )
             c = all_insps[1, :] - all_insps[0, :]
         else:
-            raise ValueError("Inputted df needs one column of [duration_s, ii_first_insp] to plot duration.")
+            raise ValueError(
+                "Input df needs 'duration_s' or 'ii_first_insp' column to plot duration."
+            )
 
         plot_type_kwargs = dict(
             c=c,
@@ -161,50 +175,46 @@ def plot_embedding_data(
         cbar_label = "duration (ms)"
 
     elif plot_type == "breaths_since_stim":
+        # Handle "breaths since stimulus" plot type
         # by default 8+ breaths are merged on cmap
         n_breaths = kwargs.pop("n_breaths", 8)
-
         n_since_stim = df["trial_index"].fillna(-1)
-        cmap = plt.get_cmap(cmap_name, n_breaths+1)
+        cmap = plt.get_cmap(cmap_name, n_breaths + 1)
         cmap.set_bad(set_bad)
 
         plot_type_kwargs = dict(
             c=np.ma.masked_equal(n_since_stim, -1),
             cmap=cmap,
             vmin=0,
-            vmax=n_breaths+1,
+            vmax=n_breaths + 1,
         )
         cbar_label = "# breaths segs since last stim"
-
-        cbar_ticks = np.arange(n_breaths+1) + 0.5
+        cbar_ticks = np.arange(n_breaths + 1) + 0.5
         cbar_tick_labels = [str(int(t)) for t in cbar_ticks]
         cbar_tick_labels[-1] = f"{cbar_tick_labels[-1]}+"
 
     elif plot_type == "bird_id":
-        birdnames = pd.Categorical(df.apply(lambda x: parse_birdname(x.name[0]), axis=1))
+        birdnames = pd.Categorical(
+            df.apply(lambda x: parse_birdname(x.name[0]), axis=1)
+        )
         n_birds = len(birdnames.unique())
-
         cmap = plt.get_cmap(cmap_name, n_birds)
 
-        plot_type_kwargs = dict(
-            c=birdnames.codes,
-            cmap=cmap,
-        )
+        plot_type_kwargs = dict(c=birdnames.codes, cmap=cmap)
         cbar_label = "bird_id"
-
         cbar_ticks = np.arange(n_birds)
         cbar_tick_labels = birdnames.unique()
         cbar_label = None
 
     elif plot_type in ["insp_onset", "insp_offset"]:
-        assert "fs" in kwargs.keys(), f"fs must be provided as kwarg for {plot_type} embedding plot."
+        assert (
+            "fs" in kwargs.keys()
+        ), f"fs must be provided as kwarg for {plot_type} embedding plot."
         all_insps = np.vstack(df["ii_first_insp"]).T / kwargs.pop("fs") * 1000
 
         if plot_type == "insp_onset":
             onsets = all_insps[0, :]
-            # map time 0 --> center of cmap
-            cmap_zero = abs(onsets.min()) / (np.ptp(onsets))
-
+            cmap_zero = abs(onsets.min()) / np.ptp(onsets)
             plot_type_kwargs = dict(
                 c=onsets,
                 vmin=onsets.min(),
@@ -215,61 +225,54 @@ def plot_embedding_data(
         elif plot_type == "insp_offset":
             plot_type_kwargs = dict(c=all_insps[1, :], cmap=plt.get_cmap(cmap_name))
 
-        else:
-            raise KeyError("Invalid plot type. How'd you even get here?")
-
         cbar_label = f"{plot_type} (ms, stim_aligned)"
 
     elif plot_type in ["clusters", "cluster", "clusterer"]:
-        assert "clusterer" in kwargs.keys(), "clusterer must be provided as kwarg for 'clusters' plot type."
+        assert (
+            "clusterer" in kwargs.keys()
+        ), "clusterer must be provided as kwarg for 'clusters' plot type."
         clusterer = kwargs.pop("clusterer")
 
         cmap = plt.get_cmap(cmap_name, np.unique(clusterer.labels_).size)
-
-        vmin = min(clusterer.labels_)
-        vmax = max(clusterer.labels_) + 1
+        vmin, vmax = min(clusterer.labels_), max(clusterer.labels_) + 1
         n = vmax - vmin
 
         hl = "highlighted_clusters" in kwargs.keys()
         msk = "masked_clusters" in kwargs.keys()
 
         if hl and msk:
-            raise ValueError("Provide either masked_clusters or highlighted_clusters, not both.")
+            raise ValueError(
+                "Provide either masked_clusters or highlighted_clusters, not both."
+            )
         elif hl:
-            masked_clusters = np.setdiff1d(np.arange(vmin, vmax), kwargs.pop("highlighted_clusters"))
+            masked_clusters = np.setdiff1d(
+                np.arange(vmin, vmax), kwargs.pop("highlighted_clusters")
+            )
         elif msk:
             masked_clusters = kwargs.pop("masked_clusters")
         else:
-            masked_clusters = [-1] # mask hdbscan noise cluster by default
+            masked_clusters = [-1]  # Default: mask hdbscan noise cluster
 
         ii_masked = np.isin(np.arange(vmin, vmax), masked_clusters)
-
         cmap = plt.get_cmap(cmap_name, n)
         colors = cmap(np.linspace(0, 1, n))
         colors[ii_masked] = set_bad
 
-        plot_type_kwargs = dict(
-            c=clusterer.labels_,
-            cmap=ListedColormap(colors),
-        )
+        plot_type_kwargs = dict(c=clusterer.labels_, cmap=ListedColormap(colors))
         cbar_label = "cluster"
+
     else:
         raise ValueError(f"Unsupported plot type: {plot_type}")
 
-    # overwrite default kwargs with user input
+    # Overwrite default kwargs with user input
     plot_type_kwargs = {**plot_type_kwargs, **kwargs}
     plot_type_kwargs["cmap"].set_bad(set_bad)
 
-    # DO PLOTTING
-    sc = ax.scatter(
-        x,
-        y,
-        **plot_type_kwargs,
-        **scatter_kwargs,
-    )
+    # Plot the embedding data
+    sc = ax.scatter(x, y, **plot_type_kwargs, **scatter_kwargs)
     ax.set(**set_kwargs)
 
-    # COLORBAR
+    # colorbar
     if show_colorbar and "cbar_label" in vars():
         cbar = plt.colorbar(sc, ax=ax)
         cbar.set_label(cbar_label)
@@ -293,24 +296,44 @@ def plot_cluster_traces_pipeline(
     set_kwargs=None,
     **plot_kwargs,
 ):
+    """
+    Pipeline function to plot cluster traces with appropriate preprocessing.
+
+    Parameters:
+    - trace_type: Type of traces to plot (e.g., "breath" or "insp").
+    - df: DataFrame containing trace data.
+    - fs: Sampling frequency.
+    - clusterer: Clusterer object to label clusters.
+    - padding_kwargs: Optional parameters for trace padding or alignment.
+    - aligned_to: The reference point to which traces are aligned.
+    - select: Selection criteria for traces (default is "all").
+    - cluster_cmap: Colormap to use for clusters.
+    - set_kwargs: Plot settings (e.g., axis limits, labels).
+    - **plot_kwargs: Additional arguments for trace plotting.
+
+    Returns:
+    - The axis object containing the plot.
+    """
     # =========GET TRACES=========#
-    # stack traces in a np array, padding or cutting as necessary
+    # Stack traces in a np array, padding or cutting as necessary
     if padding_kwargs is None:
         padding_kwargs = {}
 
     traces, aligned_at_f = stack_traces(traces=df[trace_type], **padding_kwargs)
 
-    # select based on putative_call
+    # Select based on 'putative_call' column
     traces, cluster_labels = select_traces(df, clusterer, traces, select)
 
-    # use full clusterer.labels_ to still plot empty clusters
+    # Use full clusterer.labels_ to still plot empty clusters
     cluster_data = {
         i_cluster: traces[cluster_labels == i_cluster, :]
         for i_cluster in np.unique(clusterer.labels_)
     }
 
+    # Generate x-axis for the plot
     x, xlabel = get_trace_x(trace_type, traces.shape[1], fs, aligned_at_f, aligned_to)
 
+    # Set default plot settings
     default_set_kwargs = dict(
         xlabel=xlabel,
         ylabel="amplitude",
@@ -346,7 +369,18 @@ def stack_traces(
     aligned_at=0,
 ):
     """
-    Stack traces in a DataFrame, padding or cutting as requested.
+    Stack and align traces in a DataFrame, padding or cutting them as needed.
+
+    Parameters:
+    - traces: DataFrame or Series containing the traces to stack.
+    - pad_method: Method for padding/cutting ("end", "beginning", "offset", "aligned", "index").
+    - max_length: Maximum length for padding or cutting. If None, the longest trace is used.
+    - i_align: The index to align traces to if padding/cutting method requires it.
+    - aligned_at: The index position at which traces are aligned.
+
+    Returns:
+    - A tuple (stacked_traces, aligned_at) where stacked_traces is the combined numpy array
+      and aligned_at is the index used for alignment.
     """
 
     # === use traces as-is (requires same length)
@@ -376,7 +410,9 @@ def stack_traces(
     # === align to a certain point in each trace
     elif pad_method in ["offset", "aligned", "index"]:
 
-        assert i_align is not None, f"i_align (index in each trace used for alignment) must be provided for `pad_method={pad_method}`"
+        assert (
+            i_align is not None
+        ), f"i_align (index in each trace used for alignment) must be provided for `pad_method={pad_method}`"
 
         if max_length is None:
             max_pre = max(i_align)
@@ -388,6 +424,7 @@ def stack_traces(
 
         new_traces = pd.Series(index=traces.index, dtype=object)
 
+        # Loop through traces to apply alignment based on max_pre and max_post
         for n, i in enumerate(traces.index):
             trace = traces.loc[i]
 
@@ -405,11 +442,22 @@ def stack_traces(
         aligned_at = max_pre
 
     else:
-        ValueError(f"pad_method={pad_method} not recognized")
+        raise ValueError(f"pad_method={pad_method} not recognized")
 
     return (np.vstack(traces), aligned_at)
 
+
 def _pad_cut_beginning(x, max_length):
+    """
+    Pad or cut the beginning of a trace to ensure it has a specific length.
+
+    Parameters:
+    - x: The trace to modify.
+    - max_length: The desired length for the trace.
+
+    Returns:
+    - A padded or cut version of the input trace.
+    """
     if len(x) > max_length:
         return x[-max_length:]
     else:
@@ -417,6 +465,16 @@ def _pad_cut_beginning(x, max_length):
 
 
 def _pad_cut_end(x, max_length):
+    """
+    Pad or cut the end of a trace to ensure it has a specific length.
+
+    Parameters:
+    - x: The trace to modify.
+    - max_length: The desired length for the trace.
+
+    Returns:
+    - A padded or cut version of the input trace.
+    """
     if len(x) > max_length:
         return x[:max_length]
     else:
@@ -424,6 +482,19 @@ def _pad_cut_end(x, max_length):
 
 
 def select_traces(all_breaths, clusterer, traces, select):
+    """
+    Select traces based on the 'select' criteria (e.g., "all", "call", "no call").
+
+    Parameters:
+    - all_breaths: DataFrame containing information about each breath (e.g., putative call).
+    - clusterer: Clusterer object that assigns labels to the traces.
+    - traces: The traces to filter based on the selection criteria.
+    - select: The criterion for selecting traces ("all", "call", "no call").
+
+    Returns:
+    - A tuple (selected_traces, cluster_labels) where selected_traces are the filtered traces
+      and cluster_labels are the labels from the clusterer.
+    """
     if select == "all":
         ii_select = np.ones(len(all_breaths)).astype(bool)
     elif select == "call":
@@ -439,6 +510,19 @@ def select_traces(all_breaths, clusterer, traces, select):
 
 
 def get_trace_x(trace_type, trace_len_f, fs, aligned_at_f, aligned_to=None):
+    """
+    Get the x-axis values and label for the trace plot based on trace type.
+
+    Parameters:
+    - trace_type: The type of the trace ("breath_interpolated", "insps_interpolated", etc.).
+    - trace_len_f: The length of the trace in frames.
+    - fs: The sampling frequency.
+    - aligned_at_f: The frame at which the trace is aligned.
+    - aligned_to: Optional alignment reference.
+
+    Returns:
+    - A tuple (x, xlabel) where x is the x-axis values and xlabel is the label for the axis.
+    """
     interpolated_types = ["breath_interpolated", "insps_interpolated"]
 
     # === interpolated types: [0, 1]
@@ -466,8 +550,23 @@ def plot_cluster_traces(
     all_labels=None,
     **plot_kwargs,
 ):
+    """
+    Plot traces for each cluster, optionally with various plot settings.
 
-    # overwrite default plot_kwargs with user input
+    Parameters:
+    - cluster_data: Dictionary where keys are cluster labels and values are the traces for that cluster.
+    - x: The x-axis values for the plot.
+    - select: The selection criteria ("all", "call", "no call").
+    - clusters_to_plot: The clusters to plot (can be "all" or specific labels).
+    - set_kwargs: Plot settings (e.g., labels, limits).
+    - cmap: Colormap to use for coloring the clusters.
+    - all_labels: All cluster labels for plotting (if available).
+    - plot_kwargs: Additional keyword arguments for plotting (e.g., line style, color).
+
+    Returns:
+    - A dictionary of axes for each cluster.
+    """
+    # Overwrite default plot_kwargs with user input
     default_plot_kwargs = dict(
         color="k",
         alpha=0.2,
@@ -475,45 +574,48 @@ def plot_cluster_traces(
     )
     plot_kwargs = {**default_plot_kwargs, **plot_kwargs}
 
+    # Default settings for plot if not provided
     if set_kwargs is None:
         set_kwargs = dict(
             xlabel="time",
             ylabel="amplitude",
         )
 
+    # If clusters_to_plot is set to "all", use all available clusters
     if clusters_to_plot == "all":
         clusters_to_plot = cluster_data.keys()
 
-    # predefine ax for each cluster
+    # Predefine axes for each cluster
     axs = {k: plt.subplots()[1] for k in clusters_to_plot}
 
+    # Loop through clusters to plot their traces
     for i_cluster in clusters_to_plot:
         traces = cluster_data[i_cluster]
         ax = axs[i_cluster]
 
-        # plot trials
+        # Plot the traces for the cluster
         ax.plot(
             x,
             traces.T,
             **plot_kwargs,
         )
 
-        # plot mean
+        # Plot the mean trace in red
         ax.plot(x, traces.T.mean(axis=1), color="r", linewidth=1)
 
-        # title n
+        # Set the title with the number of traces in the cluster
         if select == "all" or all_labels is None:
             n = f"{traces.shape[0]}"
         else:
             n = f"{traces.shape[0]}/{sum(all_labels == i_cluster)}"
 
-        # title color
+        # Set the title color based on the colormap or default
         if cmap is not None:
             title_color = cmap(i_cluster)
         else:
             title_color = "k"
 
-        # set title, etc.
+        # Set title and other settings for the plot
         ax.set_title(
             f"cluster {i_cluster} traces {select} (n={n})",
             color=title_color,
