@@ -624,3 +624,53 @@ def plot_cluster_traces(
         ax.set(**set_kwargs)
 
     return axs
+
+
+def plot_violin_by_cluster(
+    data,
+    cluster_labels,
+    set_kwargs=None,
+    cluster_cmap=None,
+    **plot_kwargs,
+):
+    """
+    Plot a violin plot for each cluster based on the input data.
+
+    Parameters:
+    - data: The data to plot (e.g., duration, amplitude).
+    - cluster_labels: cluster label for each point in data (eg `clusterer.labels_` for hdbscan obj)
+    - set_kwargs: Settings for the plot appearance (e.g., labels, limits).
+    - cluster_cmap: Colormap to use for coloring the clusters (according to cluster label). If none, uses default colormap (all blue).
+    - **plot_kwargs: Additional keyword arguments for violin plot.
+
+    Returns:
+    - The axis object containing the plot.
+    """
+    # Overwrite default plot_kwargs with user input
+    default_plot_kwargs = dict(showextrema=False)
+    plot_kwargs = {**default_plot_kwargs, **plot_kwargs}
+
+    # Overwrite default set_kwargs with user input
+    default_set_kwargs = dict(xlabel="cluster", ylabel="data")
+    set_kwargs = {**default_set_kwargs, **set_kwargs}
+
+    cluster_data = {
+        i_cluster: data[(cluster_labels == i_cluster) & ~np.isnan(data)]
+        for i_cluster in np.unique(cluster_labels)
+    }
+    labels, data = list(cluster_data.keys()), cluster_data.values()
+
+    # Create a violin plot for each cluster
+    fig, ax = plt.subplots()
+    parts = ax.violinplot(data, **plot_kwargs)
+
+    if cluster_cmap is not None:
+        for i, pc in enumerate(parts["bodies"]):
+            pc.set_facecolor(cluster_cmap(labels[i]))
+
+    ax.set_xticks(ticks=range(1, 1 + len(labels)), labels=labels)
+
+    # Set the plot appearance
+    ax.set(**set_kwargs)
+
+    return ax, parts
