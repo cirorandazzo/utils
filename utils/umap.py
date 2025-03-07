@@ -343,12 +343,11 @@ def stack_traces(
     pad_method=None,
     max_length=None,
     i_align=None,
+    aligned_at=0,
 ):
     """
     Stack traces in a DataFrame, padding or cutting as requested.
     """
-
-    aligned_at = None
 
     # === use traces as-is (requires same length)
     if pad_method is None:
@@ -361,33 +360,23 @@ def stack_traces(
         if max_length is None:
             max_length = max(traces.apply(len))
 
-        def pad_cut_end(x, max_length):
-            if len(x) > max_length:
-                return x[:max_length]
-            else:
-                return np.pad(x, [0, max_length - len(x)])
-
-        traces = traces.apply(pad_cut_end, max_length=max_length)
+        traces = traces.apply(_pad_cut_end, max_length=max_length)
 
         aligned_at = 0
 
     # === pad/cut at beginning
-    elif pad_method == "beginning":
+    elif pad_method in ["beginning", "start"]:
         if max_length is None:
             max_length = max(traces.apply(len))
 
-        def pad_cut_beginning(x, max_length):
-            if len(x) > max_length:
-                return x[-max_length:]
-            else:
-                return np.pad(x, [max_length - len(x), 0])
-
-        traces = traces.apply(pad_cut_beginning, max_length=max_length)
+        traces = traces.apply(_pad_cut_beginning, max_length=max_length)
 
         aligned_at = max_length
 
     # === align to a certain point in each trace
     elif pad_method in ["offset", "aligned", "index"]:
+
+        assert i_align is not None, f"i_align (index in each trace used for alignment) must be provided for `pad_method={pad_method}`"
 
         if max_length is None:
             max_pre = max(i_align)
@@ -397,12 +386,41 @@ def stack_traces(
 
         max_pre, max_post = max_length
 
-        # TODO: cut if x is longer on one or both sides
-        traces = traces.apply(lambda x: np.pad(x, [max_pre, max_post]))
+        new_traces = pd.Series(index=traces.index, dtype=object)
 
-        aligned_at = max_pre + 1
+        for n, i in enumerate(traces.index):
+            trace = traces.loc[i]
+
+            adl_len_start = max_pre - i_align[n]
+
+            trace = _pad_cut_beginning(
+                trace,
+                len(trace) + adl_len_start,
+            )
+            trace = _pad_cut_end(trace, max_pre + max_post)
+
+            new_traces.loc[i] = trace
+
+        traces = new_traces
+        aligned_at = max_pre
+
+    else:
+        ValueError(f"pad_method={pad_method} not recognized")
 
     return (np.vstack(traces), aligned_at)
+
+def _pad_cut_beginning(x, max_length):
+    if len(x) > max_length:
+        return x[-max_length:]
+    else:
+        return np.pad(x, [max_length - len(x), 0])
+
+
+def _pad_cut_end(x, max_length):
+    if len(x) > max_length:
+        return x[:max_length]
+    else:
+        return np.pad(x, [0, max_length - len(x)])
 
 
 def select_traces(all_breaths, clusterer, traces, select):
@@ -421,7 +439,7 @@ def select_traces(all_breaths, clusterer, traces, select):
 
 
 def get_trace_x(trace_type, trace_len_f, fs, aligned_at_f, aligned_to=None):
-    interpolated_types = ["breath_interpolated", "insp_interpolated"]
+    interpolated_types = ["breath_interpolated", "insps_interpolated"]
 
     # === interpolated types: [0, 1]
     if trace_type in interpolated_types:
