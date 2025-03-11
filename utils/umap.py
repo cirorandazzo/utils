@@ -288,12 +288,13 @@ def plot_cluster_traces_pipeline(
     trace_type,
     df,
     fs,
-    clusterer,
+    cluster_labels,
     padding_kwargs=None,
     aligned_to=None,
     select="all",
     cluster_cmap=None,
     set_kwargs=None,
+    axs=None,
     **plot_kwargs,
 ):
     """
@@ -319,15 +320,22 @@ def plot_cluster_traces_pipeline(
     if padding_kwargs is None:
         padding_kwargs = {}
 
-    traces, aligned_at_f = stack_traces(traces=df[trace_type], **padding_kwargs)
+    try:
+        raw_traces = df[trace_type]
+    except KeyError:
+        raw_traces = df
+
+    traces, aligned_at_f = stack_traces(traces=raw_traces, **padding_kwargs)
+
+    all_cluster_labels = np.unique(cluster_labels)
 
     # Select based on 'putative_call' column
-    traces, cluster_labels = select_traces(df, clusterer, traces, select)
+    traces, cluster_labels = select_traces(df, cluster_labels, traces, select)
 
     # Use full clusterer.labels_ to still plot empty clusters
     cluster_data = {
         i_cluster: traces[cluster_labels == i_cluster, :]
-        for i_cluster in np.unique(clusterer.labels_)
+        for i_cluster in all_cluster_labels
     }
 
     # Generate x-axis for the plot
@@ -353,8 +361,9 @@ def plot_cluster_traces_pipeline(
         select,
         clusters_to_plot="all",
         cmap=cluster_cmap,
-        all_labels=clusterer.labels_,
+        all_labels=cluster_labels,
         set_kwargs=set_kwargs,
+        axs=axs,
         **plot_kwargs,
     )
 
@@ -481,7 +490,7 @@ def _pad_cut_end(x, max_length):
         return np.pad(x, [0, max_length - len(x)])
 
 
-def select_traces(all_breaths, clusterer, traces, select):
+def select_traces(all_breaths, cluster_labels, traces, select):
     """
     Select traces based on the 'select' criteria (e.g., "all", "call", "no call").
 
@@ -505,7 +514,8 @@ def select_traces(all_breaths, clusterer, traces, select):
         raise ValueError(f"select={select} not recognized")
 
     traces = traces[ii_select]
-    cluster_labels = clusterer.labels_[ii_select]
+    cluster_labels = cluster_labels[ii_select]
+    
     return traces, cluster_labels
 
 
@@ -529,6 +539,9 @@ def get_trace_x(trace_type, trace_len_f, fs, aligned_at_f, aligned_to=None):
     if trace_type in interpolated_types:
         x = np.linspace(0, 1, trace_len_f)
         xlabel = "normalized duration"
+
+        if aligned_at_f is not None:
+            x = x + aligned_at_f
     # === time
     else:
         x = (np.arange(trace_len_f) - aligned_at_f) / fs * 1000
@@ -548,6 +561,7 @@ def plot_cluster_traces(
     set_kwargs=None,
     cmap=None,
     all_labels=None,
+    axs=None,
     **plot_kwargs,
 ):
     """
@@ -586,7 +600,8 @@ def plot_cluster_traces(
         clusters_to_plot = cluster_data.keys()
 
     # Predefine axes for each cluster
-    axs = {k: plt.subplots()[1] for k in clusters_to_plot}
+    if axs is None:
+        axs = {k: plt.subplots()[1] for k in clusters_to_plot}
 
     # Loop through clusters to plot their traces
     for i_cluster in clusters_to_plot:
