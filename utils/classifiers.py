@@ -2,13 +2,35 @@
 #
 # utils for calcium classifiers
 
+from copy import deepcopy
+import os
+import pickle
+
+import numpy as np
+import pandas as pd
+
+import matplotlib.pyplot as plt
+from matplotlib.colors import LinearSegmentedColormap
+
+from seaborn import heatmap
+
+from sklearn.pipeline import make_pipeline
+from sklearn.metrics import (
+    balanced_accuracy_score,
+    confusion_matrix,
+    f1_score,
+    precision_score,
+    recall_score,
+)
+
+from .plot import confusion_matrix_plot
+
 
 def cut_calcium_data(
     row,
     pre_onset=3,
     post_onset=1,
 ):
-    import numpy as np
 
     x = row["x"]
     first = np.flatnonzero((x[1:] >= 0) & (x[:-1] < 0))[
@@ -75,12 +97,6 @@ def make_scores_df(
     >>> scores_df = make_scores_dict("/path/to/syllables")
     """
 
-    import os
-    import pickle
-
-    import numpy as np
-    import pandas as pd
-
     all_scores = pd.DataFrame()  # Initialize an empty DataFrame to store all scores
 
     for i_syl in range(max_syls):
@@ -126,13 +142,6 @@ def plot_all_cms(
     figure_extension="svg",
     skip_crossfolds=True,
 ):
-    import os
-
-    import matplotlib.pyplot as plt
-    import numpy as np
-
-    from .plot import confusion_matrix_plot
-
     if not ((y is None) ^ (cm_labels is None)):
         raise TypeError("Exactly one of `y` or `labels` must be defined.")
 
@@ -217,10 +226,6 @@ def plot_all_tr_cms(
     """
     unused_kw: eats unused kwargs. enables using 'to_save' dicts without deleting params
     """
-    import numpy as np
-    import matplotlib.pyplot as plt
-    import os
-
     all_trans = data.reset_index().apply(trans_map, axis=1)
 
     unique_trans = list(np.unique(all_trans))
@@ -305,12 +310,6 @@ def plot_all_tr_cms_diffs(
     sort_key=None,
     figure_extension="svg",
 ):
-    import os
-
-    import numpy as np
-    import matplotlib.pyplot as plt
-    from matplotlib.colors import LinearSegmentedColormap
-
     # make true transition confusion matrix (tr_cm)
     y_trans = data.reset_index().apply(trans_map, axis=1)
 
@@ -461,10 +460,6 @@ def plot_scores(
     >>>     linestyle="--",)
     >>> plt.show()
     """
-
-    import matplotlib.pyplot as plt
-    import numpy as np
-
     if ax is None:
         fig, ax = plt.subplots(figsize=(12, 6))
 
@@ -511,18 +506,6 @@ def train_models(
     preprocessing_steps=[],
     return_cm_labels=False,
 ):
-    import numpy as np
-
-    from sklearn.pipeline import make_pipeline
-    from sklearn.metrics import (
-        balanced_accuracy_score,
-        confusion_matrix,
-        f1_score,
-        precision_score,
-        recall_score,
-    )
-    from copy import deepcopy
-
     fitted_classifiers = {}
     performance = {}
     cms = {}
@@ -583,9 +566,6 @@ def make_subcondition_confusion_matrix(
     y_pred_unique_labels=None,
     prob=True,
 ):
-    import numpy as np
-    from sklearn.metrics import confusion_matrix
-
     # define unique labels if not provided
     def _check_unique_labels(unique_labels, all_labels):
         if unique_labels is None:
@@ -627,12 +607,9 @@ def subcondition_confusion_matrix_plot(
     y_true_unique_labels,
     ax=None,
     cmap="magma",
+    set_kwargs=None,
     **heatmap_kwarg,
 ):
-    import numpy as np
-    import matplotlib.pyplot as plt
-    from seaborn import heatmap
-
     # Plotting the confusion matrix
     if ax is None:
         fig, ax = plt.subplots()
@@ -648,18 +625,19 @@ def subcondition_confusion_matrix_plot(
     )
     plt.yticks(rotation=0)
 
-    ax.set(
-        ylabel="True label",
-        xlabel="Predicted label",
-    )
+    default_set_kwargs = dict(ylabel="True label", xlabel="Predicted label")
+
+    if set_kwargs is None:
+        set_kwargs = default_set_kwargs
+    else:
+        set_kwargs = {**default_set_kwargs, **set_kwargs}
+
+    ax.set(**set_kwargs)
 
     return ax
 
 
 def print_performance(performance):
-    import numpy as np
-    import pandas as pd
-
     if isinstance(list(performance.values())[0], dict):
         df = pd.DataFrame.from_dict(performance, orient="index").applymap(np.mean)
         df.index.name = "Model Name"
