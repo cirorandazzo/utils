@@ -213,9 +213,34 @@ def plot_breath_callback_trial(
     return ax
 
 
-def fit_breath_distribution(breath, kde_points=100):
+def get_kde_distribution(data, xlim=None, xsteps=100, x_dist=None, **kwargs):
     """
-    For a breath waveform, constructs a smoothed distribution using a Kernel Density Estimate (KDE), extracts the inspiratory and expiratory peaks, then takes zero point threshold as the trough between those peaks.
+    TODO: docstring
+
+    """
+
+    data = np.array(data)
+
+    # Perform Kernel Density Estimation (KDE) to create a smooth distribution
+    kde = gaussian_kde(data, **kwargs)
+
+    # Sample from kde distribution
+    if x_dist is None:
+        if xlim is None:
+            xlim = (data.min(), data.max())
+
+        # Generate evenly spaced x-values covering the range of the breath data
+        x_dist = np.linspace(*xlim, xsteps)
+
+    # return sampled distr
+    y_dist = kde(x_dist)
+
+    return kde, x_dist, y_dist
+
+
+def fit_breath_distribution(breath, **kde_kwargs):
+    """
+    For 1d data, constructs a smoothed distribution using a Kernel Density Estimate (KDE), extracts the inspiratory and expiratory peaks, then takes zero point threshold as the trough between those peaks.
 
     The function identifies the two most prominent peaks in the pressure amplitude distribution of a breath waveform, and the minimum (trough) value between those peaks. Additionally, it returns a spline fit of the pressure distribution.
 
@@ -224,8 +249,8 @@ def fit_breath_distribution(breath, kde_points=100):
     breath : array-like
         The breath waveform data (pressure amplitude distribution).
 
-    kde_points : int, optional, default=100
-        The number of points used for generating the Kernel Density Estimate (KDE) distribution.
+
+    **kde_kwargs: kwargs for computing sampled kde distribution (see get_kde_distribution)
 
     Returns:
     -------
@@ -245,12 +270,7 @@ def fit_breath_distribution(breath, kde_points=100):
         and expiratory peaks).
     """
 
-    # Generate evenly spaced x-values covering the range of the breath data
-    x_dist = np.linspace(breath.min(), breath.max(), kde_points)
-
-    # Perform Kernel Density Estimation (KDE) to create a smooth distribution
-    kde = gaussian_kde(breath)
-    dist_kde = kde(x_dist)
+    kde, x_dist, dist_kde = get_kde_distribution(breath, **kde_kwargs)
 
     # Identify the indices of all peaks in the KDE distribution
     peak_indices = find_peaks(dist_kde)[0]
