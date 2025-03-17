@@ -233,7 +233,6 @@ def plot_embedding_data(
         ), "clusterer must be provided as kwarg for 'clusters' plot type."
         clusterer = kwargs.pop("clusterer")
 
-        cmap = plt.get_cmap(cmap_name, np.unique(clusterer.labels_).size)
         vmin, vmax = min(clusterer.labels_), max(clusterer.labels_) + 1
         n = vmax - vmin
 
@@ -260,6 +259,9 @@ def plot_embedding_data(
 
         plot_type_kwargs = dict(c=clusterer.labels_, cmap=ListedColormap(colors))
         cbar_label = "cluster"
+
+        cbar_ticks = clusterer.labels_
+        cbar_tick_labels = clusterer.labels_
 
     else:
         raise ValueError(f"Unsupported plot type: {plot_type}")
