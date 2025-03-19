@@ -508,3 +508,40 @@ def get_first_breath_segment(
         raise ValueError(f"Unknown unit: {return_unit}")
 
     return earliest_call
+
+
+def get_phase(t_nMin1Exp_to_Call, avgExpDur, avgInspDur):
+    """
+    python implementation of ziggy phase computation code ("phase2.m")
+
+    t_nMin1Exp_to_Call: time between preceding expiration & call [waiting to hear from ziggy what event is meant by "call"]
+    """
+
+    phase = None
+
+    avgBreathDur = avgExpDur + avgInspDur
+
+    assert t_nMin1Exp_to_Call < (
+        2 * avgBreathDur
+    ), "algorithm only implmented for callT within 2 normal breath lengths!"
+
+    t_nMin1Exp_to_Call = t_nMin1Exp_to_Call % avgBreathDur
+
+    # call happens before the expiration before the call... (ie, oops)
+    if t_nMin1Exp_to_Call < 0:
+        phase = 0.1
+
+    # call happens during this expiration
+    elif t_nMin1Exp_to_Call < avgExpDur:
+        # expiration is [0, pi]
+        phase = np.pi * (t_nMin1Exp_to_Call / avgExpDur)
+
+    # call happens during inspiration after that
+    elif t_nMin1Exp_to_Call >= avgExpDur and t_nMin1Exp_to_Call < avgBreathDur:
+        # inspiration is [pi, 2pi]
+        phase = np.pi * (1 + (t_nMin1Exp_to_Call - avgExpDur) / avgInspDur)
+
+    else:
+        ValueError("this really shouldn't happen...")
+
+    return phase
