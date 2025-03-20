@@ -15,6 +15,8 @@ from scipy.stats import gaussian_kde
 import matplotlib.pyplot as plt
 from matplotlib.collections import LineCollection
 
+from .umap import loc_relative as umap__loc_relative
+
 
 def segment_breaths(
     breathing_unfilt,
@@ -545,3 +547,11 @@ def get_phase(t_nMin1Exp_to_Call, avgExpDur, avgInspDur):
         ValueError("this really shouldn't happen...")
 
     return phase
+
+
+def loc_relative(*args, **kwargs):
+    """
+    alias for utils.umap > loc_relative()
+    """
+
+    return umap__loc_relative(*args, **kwargs)
