@@ -1,5 +1,7 @@
 # utils/umap.py
 
+from math import floor, ceil
+
 import numpy as np
 import pandas as pd
 
@@ -68,6 +70,7 @@ def plot_embedding_data(
     df=None,
     ax=None,
     plot_type="putative_call",
+    c=None,
     show_colorbar=True,
     cmap_name=None,
     scatter_kwargs=None,
@@ -83,7 +86,8 @@ def plot_embedding_data(
     - embedding_name: Name of the embedding.
     - df: DataFrame containing metadata for color mapping. Order should match embedding. Can be all_breaths or all_trials.
     - ax: The axis object to plot on. If None, a new figure is created.
-    - plot_type: Type of plot to generate (e.g., "putative_call", "amplitude", etc.). Deals with selecting relevant field from df & particulars of colormap.
+    - plot_type: Type of plot to generate (e.g., "putative_call", "amplitude", etc.). Deals with selecting relevant field from df & particulars of colormap. Ignored if kwarg "c" is given.
+    - c: Directly give colors for mapping. 
     - show_colorbar: Whether to display a colorbar.
     - cmap_name: Colormap to use. Default is None, which uses a predefined mapping. You can alternatively pass an actual cmap to kwargs, maybe.
     - scatter_kwargs: Additional arguments for the scatter plot.
@@ -131,9 +135,9 @@ def plot_embedding_data(
         cmap_name = default_cmaps.get(plot_type, "viridis")
 
     # Plot specific handling based on plot_type
-    if "c" in kwargs.keys():
+    if c is not None:
         # Manually defined color labels
-        plot_type_kwargs = dict(c=kwargs.pop("c"), cmap=plt.get_cmap(cmap_name))
+        plot_type_kwargs = dict(c=c, cmap=plt.get_cmap(cmap_name))
 
     elif plot_type == "putative_call":
         plot_type_kwargs = dict(
@@ -234,30 +238,9 @@ def plot_embedding_data(
         clusterer = kwargs.pop("clusterer")
 
         vmin, vmax = min(clusterer.labels_), max(clusterer.labels_) + 1
-        n = vmax - vmin
+        cmap = get_discrete_cmap(cmap_name, set_bad, kwargs, vmin, vmax)
 
-        hl = "highlighted_clusters" in kwargs.keys()
-        msk = "masked_clusters" in kwargs.keys()
-
-        if hl and msk:
-            raise ValueError(
-                "Provide either masked_clusters or highlighted_clusters, not both."
-            )
-        elif hl:
-            masked_clusters = np.setdiff1d(
-                np.arange(vmin, vmax), kwargs.pop("highlighted_clusters")
-            )
-        elif msk:
-            masked_clusters = kwargs.pop("masked_clusters")
-        else:
-            masked_clusters = [-1]  # Default: mask hdbscan noise cluster
-
-        ii_masked = np.isin(np.arange(vmin, vmax), masked_clusters)
-        cmap = plt.get_cmap(cmap_name, n)
-        colors = cmap(np.linspace(0, 1, n))
-        colors[ii_masked] = set_bad
-
-        plot_type_kwargs = dict(c=clusterer.labels_, cmap=ListedColormap(colors))
+        plot_type_kwargs = dict(c=clusterer.labels_, cmap=cmap)
         cbar_label = "cluster"
 
         cbar_ticks = clusterer.labels_
@@ -284,6 +267,53 @@ def plot_embedding_data(
         cbar.set_ticklabels(cbar_tick_labels)
 
     return ax
+
+
+def get_discrete_cmap(
+    vmin,
+    vmax,
+    set_bad=None,
+    cmap_name="jet",
+    highlighted_clusters=None,
+    masked_clusters=None,
+):
+    """
+    Gets a discrete colormap 
+    """
+
+    vmin = floor(vmin)
+    vmax = ceil(vmax)
+
+    if set_bad is None:
+        set_bad = dict(c="k", alpha=0.2)
+
+    if isinstance(set_bad, dict):
+        set_bad = to_rgba(**set_bad)
+
+    n = vmax - vmin
+
+    hl = highlighted_clusters is not None
+    msk = masked_clusters is not None
+
+    if hl and msk:
+        raise ValueError(
+            "Provide either masked_clusters or highlighted_clusters, not both."
+        )
+    elif hl:
+        masked_clusters = np.setdiff1d(np.arange(vmin, vmax), highlighted_clusters)
+    elif msk:
+        masked_clusters = masked_clusters
+    else:
+        masked_clusters = [-1]  # Default: mask hdbscan noise cluster
+
+    ii_masked = np.isin(np.arange(vmin, vmax), masked_clusters)
+
+    cmap = plt.get_cmap(cmap_name, n)
+    colors = cmap(np.linspace(0, 1, n))
+    colors[ii_masked] = set_bad
+
+    cmap = ListedColormap(colors)
+    return cmap
 
 
 def plot_cluster_traces_pipeline(
