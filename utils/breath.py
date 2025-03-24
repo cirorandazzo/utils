@@ -516,6 +516,7 @@ def get_phase(
     breathDur,
     avgExpDur,
     avgInspDur,
+    wrap=True,
 ):
     """
     python implementation of ziggy phase computation code ("phase2.m")
@@ -523,17 +524,24 @@ def get_phase(
     Note: algorithm errors on breathDur > 2 normal breath lengths (for consistency with ZK code)
 
     breathDur: time between preceding expiration & event for which to compute phase - usually onset of call expiration. (formerly t_nMin1Exp_to_Call)
-    avgExpDur: duration of expiration for comparison (in same unit as breathDur). Usually, this is the mean duration of non-call expirations. breathDur in [0, avgExpDur] (time) is mapped to [0, pi].  breathDur in [0, avgExpDur] (time) is mapped to [0, pi]. 
+    avgExpDur: duration of expiration for comparison (in same unit as breathDur). Usually, this is the mean duration of non-call expirations. breathDur in [0, avgExpDur] (time) is mapped to [0, pi].  breathDur in [0, avgExpDur] (time) is mapped to [0, pi].
     avgInspDur: duration of inspiration for comparison (in same unit as breathDur). Usually, this is the mean duration of non-call inspirations. breathDur in [0, avgExpDur] (time) is mapped to [0, pi].  breathDur in [avgExpDur, avgExpDur+avgInspDur] (time) is mapped to [pi, 2pi].
+    wrap: Behavior for breaths longer than average breath. If True, computes based on (breathDur MOD avgDur) - ie, constrains to 2pi. If False, breathDur longer than avgBreathDur return phase greater than 2pi. Default True (as in ZK implementation).
     """
 
     phase = None
 
     avgBreathDur = avgExpDur + avgInspDur
+    dur_ratio = breathDur / avgBreathDur  # get it? duration ratio?
 
-    assert breathDur < (
-        2 * avgBreathDur
+    assert (
+        dur_ratio <= 2
     ), "algorithm only implmented for callT within 2 normal breath lengths!"
+
+    if wrap:
+        n = 0
+    else:
+        n = 2 * np.pi * np.floor(dur_ratio)
 
     breathDur = breathDur % avgBreathDur
 
@@ -554,7 +562,7 @@ def get_phase(
     else:
         ValueError("this really shouldn't happen...")
 
-    return phase
+    return n + phase
 
 
 def loc_relative(*args, **kwargs):
