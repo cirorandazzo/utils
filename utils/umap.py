@@ -238,7 +238,9 @@ def plot_embedding_data(
         clusterer = kwargs.pop("clusterer")
 
         vmin, vmax = min(clusterer.labels_), max(clusterer.labels_) + 1
-        cmap = get_discrete_cmap(cmap_name, set_bad, kwargs, vmin, vmax)
+        cmap = get_discrete_cmap(
+            vmin=vmin, vmax=vmax, set_bad=set_bad, cmap_name=cmap_name
+        )
 
         plot_type_kwargs = dict(c=clusterer.labels_, cmap=cmap)
         cbar_label = "cluster"
