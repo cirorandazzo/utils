@@ -245,8 +245,10 @@ def plot_embedding_data(
         plot_type_kwargs = dict(c=clusterer.labels_, cmap=cmap)
         cbar_label = "cluster"
 
-        cbar_ticks = clusterer.labels_
-        cbar_tick_labels = clusterer.labels_
+        labels = sorted(np.unique(clusterer.labels_))
+
+        cbar_ticks = labels
+        cbar_tick_labels = labels
 
     else:
         raise ValueError(f"Unsupported plot type: {plot_type}")
