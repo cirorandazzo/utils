@@ -725,3 +725,30 @@ def plot_violin_by_cluster(
     ax.set(**set_kwargs)
 
     return ax, parts
+
+
+def prepare_clusters_axs_dict(labels, nrows=1, ncols=1, **subplots_kwargs):
+    """
+    Prep dict of {cluster_name : ax} for each cluster_name in labels.
+
+    TODO: add "wrap" setting - should it create an unfilled subplot (as it currently does), or make the last subplot smaller?
+    """
+    n_figs = int(np.ceil(len(labels) / (nrows * ncols)))
+
+    outs = np.array(
+        [
+            plt.subplots(nrows=nrows, ncols=ncols, **subplots_kwargs)
+            for i in range(n_figs)
+        ]
+    )
+
+    figs = outs[:, 0]
+    axs = np.stack(outs[:, 1])
+
+    axs_dict = {l: ax for l, ax in zip(labels, axs.ravel()[: len(labels)])}
+
+    # set remaining axes off
+    for ax in axs.ravel()[len(labels):]:
+        ax.set_axis_off()
+
+    return figs, axs, axs_dict
