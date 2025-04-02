@@ -14,6 +14,46 @@ from .file import parse_birdname
 from .plot import remap_cmap
 
 
+def get_call_exps(all_breaths, exclude_song=True):
+    """
+    from df all_breaths, return only rows that contain call expirations
+
+    NOTE: this code didn't consider call status of subsequent call before
+    refactor; so, first syll was presumably included. refactor considers
+    the next call & excludes these when exclude_song = True
+    """
+
+    ii_exp = all_breaths["type"] == "exp"
+    ii_call = all_breaths["putative_call"]
+
+    # exclude song: if the prev/next exp also surpassed amplitude threshold, it's probably song.
+    if exclude_song:
+        kwargs = dict(df=all_breaths, field="putative_call", default=False)
+
+        ii_prev_call = all_breaths.apply(
+            lambda x: loc_relative(
+                *x.name, all_breaths, i=-2, field="putative_call", default=False
+            ),
+            axis=1,
+        )
+
+        ii_next_call = all_breaths.apply(
+            lambda x: loc_relative(
+                *x.name, all_breaths, i=2, field="putative_call", default=False
+            ),
+            axis=1,
+        )
+
+        ii_song = ii_prev_call | ii_next_call
+
+    else:
+        ii_song = np.zeros_like(ii_call)
+
+    call_exps = all_breaths.loc[ii_exp & ii_call & ~ii_song]
+
+    return call_exps
+
+
 def get_time_since_stim(x, all_trials):
     """
     Calculate the time since the previous stimulus for a breath trial x.
