@@ -14,9 +14,11 @@ from .file import parse_birdname
 from .plot import remap_cmap
 
 
-def get_call_exps(all_breaths, exclude_song=True):
+def get_call_exps(all_breaths, exclude_song=True, return_index=False):
     """
     from df all_breaths, return only rows that contain call expirations
+
+    if return_index is True, returns a boolean pd.Series with index matching all_breaths (instead of df)
 
     NOTE: this code didn't consider call status of subsequent call before
     refactor; so, first syll was presumably included. refactor considers
@@ -49,9 +51,12 @@ def get_call_exps(all_breaths, exclude_song=True):
     else:
         ii_song = np.zeros_like(ii_call)
 
-    call_exps = all_breaths.loc[ii_exp & ii_call & ~ii_song]
+    ii_call_exp = ii_exp & ii_call & ~ii_song
 
-    return call_exps
+    if return_index:
+        return ii_call_exp
+    else:
+        return all_breaths.loc[ii_call_exp]
 
 
 def get_time_since_stim(x, all_trials):
