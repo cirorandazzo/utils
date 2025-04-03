@@ -6,7 +6,7 @@ import numpy as np
 import pandas as pd
 
 import matplotlib.pyplot as plt
-from matplotlib.colors import ListedColormap, to_rgba
+from matplotlib.colors import ListedColormap, Normalize, to_rgba
 
 import hdbscan
 
@@ -641,6 +641,8 @@ def plot_cluster_traces(
     clusters_to_plot="all",
     set_kwargs=None,
     cmap=None,
+    vmin=None,
+    vmax=None,
     all_labels=None,
     axs=None,
     **plot_kwargs,
@@ -705,9 +707,16 @@ def plot_cluster_traces(
         else:
             n = f"{traces.shape[0]}/{sum(all_labels == i_cluster)}"
 
+        if vmin is None:
+            vmin = min(all_labels)
+        if vmax is None:
+            vmax = max(all_labels)
+
+        norm = Normalize(vmin, vmax)
+
         # Set the title color based on the colormap or default
         if cmap is not None:
-            title_color = cmap(i_cluster)
+            title_color = cmap(norm(i_cluster))
         else:
             title_color = "k"
 
@@ -727,6 +736,8 @@ def plot_violin_by_cluster(
     cluster_labels,
     set_kwargs=None,
     cluster_cmap=None,
+    vmin=None,
+    vmax=None,
     **plot_kwargs,
 ):
     """
@@ -760,9 +771,16 @@ def plot_violin_by_cluster(
     fig, ax = plt.subplots()
     parts = ax.violinplot(data, **plot_kwargs)
 
+    if vmin is None:
+        vmin = min(cluster_labels)
+    if vmax is None:
+        vmax = max(cluster_labels)
+
+    norm = Normalize(vmin, vmax)
+
     if cluster_cmap is not None:
         for i, pc in enumerate(parts["bodies"]):
-            pc.set_facecolor(cluster_cmap(labels[i]))
+            pc.set_facecolor(cluster_cmap(norm(labels[i])))
 
     ax.set_xticks(ticks=range(1, 1 + len(labels)), labels=labels)
 
