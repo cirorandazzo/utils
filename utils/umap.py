@@ -1,15 +1,62 @@
 # utils/umap.py
 
+from math import floor, ceil
+
 import numpy as np
 import pandas as pd
 
 import matplotlib.pyplot as plt
-from matplotlib.colors import ListedColormap, to_rgba
+from matplotlib.colors import ListedColormap, Normalize, to_rgba
 
 import hdbscan
 
 from .file import parse_birdname
 from .plot import remap_cmap
+
+
+def get_call_exps(all_breaths, exclude_song=True, return_index=False):
+    """
+    from df all_breaths, return only rows that contain call expirations
+
+    if return_index is True, returns a boolean pd.Series with index matching all_breaths (instead of df)
+
+    NOTE: this code didn't consider call status of subsequent call before
+    refactor; so, first syll was presumably included. refactor considers
+    the next call & excludes these when exclude_song = True
+    """
+
+    ii_exp = all_breaths["type"] == "exp"
+    ii_call = all_breaths["putative_call"]
+
+    # exclude song: if the prev/next exp also surpassed amplitude threshold, it's probably song.
+    if exclude_song:
+        kwargs = dict(df=all_breaths, field="putative_call", default=False)
+
+        ii_prev_call = all_breaths.apply(
+            lambda x: loc_relative(
+                *x.name, all_breaths, i=-2, field="putative_call", default=False
+            ),
+            axis=1,
+        )
+
+        ii_next_call = all_breaths.apply(
+            lambda x: loc_relative(
+                *x.name, all_breaths, i=2, field="putative_call", default=False
+            ),
+            axis=1,
+        )
+
+        ii_song = ii_prev_call | ii_next_call
+
+    else:
+        ii_song = np.zeros_like(ii_call)
+
+    ii_call_exp = ii_exp & ii_call & ~ii_song
+
+    if return_index:
+        return ii_call_exp
+    else:
+        return all_breaths.loc[ii_call_exp]
 
 
 def get_time_since_stim(x, all_trials):
@@ -68,6 +115,7 @@ def plot_embedding_data(
     df=None,
     ax=None,
     plot_type="putative_call",
+    c=None,
     show_colorbar=True,
     cmap_name=None,
     scatter_kwargs=None,
@@ -83,7 +131,8 @@ def plot_embedding_data(
     - embedding_name: Name of the embedding.
     - df: DataFrame containing metadata for color mapping. Order should match embedding. Can be all_breaths or all_trials.
     - ax: The axis object to plot on. If None, a new figure is created.
-    - plot_type: Type of plot to generate (e.g., "putative_call", "amplitude", etc.). Deals with selecting relevant field from df & particulars of colormap.
+    - plot_type: Type of plot to generate (e.g., "putative_call", "amplitude", etc.). Deals with selecting relevant field from df & particulars of colormap. Ignored if kwarg "c" is given.
+    - c: Directly give colors for mapping. 
     - show_colorbar: Whether to display a colorbar.
     - cmap_name: Colormap to use. Default is None, which uses a predefined mapping. You can alternatively pass an actual cmap to kwargs, maybe.
     - scatter_kwargs: Additional arguments for the scatter plot.
@@ -131,9 +180,9 @@ def plot_embedding_data(
         cmap_name = default_cmaps.get(plot_type, "viridis")
 
     # Plot specific handling based on plot_type
-    if "c" in kwargs.keys():
+    if c is not None:
         # Manually defined color labels
-        plot_type_kwargs = dict(c=kwargs.pop("c"), cmap=plt.get_cmap(cmap_name))
+        plot_type_kwargs = dict(c=c, cmap=plt.get_cmap(cmap_name))
 
     elif plot_type == "putative_call":
         plot_type_kwargs = dict(
@@ -234,34 +283,17 @@ def plot_embedding_data(
         clusterer = kwargs.pop("clusterer")
 
         vmin, vmax = min(clusterer.labels_), max(clusterer.labels_) + 1
-        n = vmax - vmin
+        cmap = get_discrete_cmap(
+            vmin=vmin, vmax=vmax, set_bad=set_bad, cmap_name=cmap_name
+        )
 
-        hl = "highlighted_clusters" in kwargs.keys()
-        msk = "masked_clusters" in kwargs.keys()
-
-        if hl and msk:
-            raise ValueError(
-                "Provide either masked_clusters or highlighted_clusters, not both."
-            )
-        elif hl:
-            masked_clusters = np.setdiff1d(
-                np.arange(vmin, vmax), kwargs.pop("highlighted_clusters")
-            )
-        elif msk:
-            masked_clusters = kwargs.pop("masked_clusters")
-        else:
-            masked_clusters = [-1]  # Default: mask hdbscan noise cluster
-
-        ii_masked = np.isin(np.arange(vmin, vmax), masked_clusters)
-        cmap = plt.get_cmap(cmap_name, n)
-        colors = cmap(np.linspace(0, 1, n))
-        colors[ii_masked] = set_bad
-
-        plot_type_kwargs = dict(c=clusterer.labels_, cmap=ListedColormap(colors))
+        plot_type_kwargs = dict(c=clusterer.labels_, cmap=cmap)
         cbar_label = "cluster"
 
-        cbar_ticks = clusterer.labels_
-        cbar_tick_labels = clusterer.labels_
+        labels = sorted(np.unique(clusterer.labels_))
+
+        cbar_ticks = labels
+        cbar_tick_labels = labels
 
     else:
         raise ValueError(f"Unsupported plot type: {plot_type}")
@@ -284,6 +316,53 @@ def plot_embedding_data(
         cbar.set_ticklabels(cbar_tick_labels)
 
     return ax
+
+
+def get_discrete_cmap(
+    vmin,
+    vmax,
+    set_bad=None,
+    cmap_name="jet",
+    highlighted_clusters=None,
+    masked_clusters=None,
+):
+    """
+    Gets a discrete colormap 
+    """
+
+    vmin = floor(vmin)
+    vmax = ceil(vmax)
+
+    if set_bad is None:
+        set_bad = dict(c="k", alpha=0.2)
+
+    if isinstance(set_bad, dict):
+        set_bad = to_rgba(**set_bad)
+
+    n = vmax - vmin
+
+    hl = highlighted_clusters is not None
+    msk = masked_clusters is not None
+
+    if hl and msk:
+        raise ValueError(
+            "Provide either masked_clusters or highlighted_clusters, not both."
+        )
+    elif hl:
+        masked_clusters = np.setdiff1d(np.arange(vmin, vmax), highlighted_clusters)
+    elif msk:
+        masked_clusters = masked_clusters
+    else:
+        masked_clusters = [-1]  # Default: mask hdbscan noise cluster
+
+    ii_masked = np.isin(np.arange(vmin, vmax), masked_clusters)
+
+    cmap = plt.get_cmap(cmap_name, n)
+    colors = cmap(np.linspace(0, 1, n))
+    colors[ii_masked] = set_bad
+
+    cmap = ListedColormap(colors)
+    return cmap
 
 
 def plot_cluster_traces_pipeline(
@@ -562,6 +641,8 @@ def plot_cluster_traces(
     clusters_to_plot="all",
     set_kwargs=None,
     cmap=None,
+    vmin=None,
+    vmax=None,
     all_labels=None,
     axs=None,
     **plot_kwargs,
@@ -626,9 +707,16 @@ def plot_cluster_traces(
         else:
             n = f"{traces.shape[0]}/{sum(all_labels == i_cluster)}"
 
+        if vmin is None:
+            vmin = min(all_labels)
+        if vmax is None:
+            vmax = max(all_labels)
+
+        norm = Normalize(vmin, vmax)
+
         # Set the title color based on the colormap or default
         if cmap is not None:
-            title_color = cmap(i_cluster)
+            title_color = cmap(norm(i_cluster))
         else:
             title_color = "k"
 
@@ -648,6 +736,8 @@ def plot_violin_by_cluster(
     cluster_labels,
     set_kwargs=None,
     cluster_cmap=None,
+    vmin=None,
+    vmax=None,
     **plot_kwargs,
 ):
     """
@@ -681,9 +771,16 @@ def plot_violin_by_cluster(
     fig, ax = plt.subplots()
     parts = ax.violinplot(data, **plot_kwargs)
 
+    if vmin is None:
+        vmin = min(cluster_labels)
+    if vmax is None:
+        vmax = max(cluster_labels)
+
+    norm = Normalize(vmin, vmax)
+
     if cluster_cmap is not None:
         for i, pc in enumerate(parts["bodies"]):
-            pc.set_facecolor(cluster_cmap(labels[i]))
+            pc.set_facecolor(cluster_cmap(norm(labels[i])))
 
     ax.set_xticks(ticks=range(1, 1 + len(labels)), labels=labels)
 
@@ -691,3 +788,30 @@ def plot_violin_by_cluster(
     ax.set(**set_kwargs)
 
     return ax, parts
+
+
+def prepare_clusters_axs_dict(labels, nrows=1, ncols=1, **subplots_kwargs):
+    """
+    Prep dict of {cluster_name : ax} for each cluster_name in labels.
+
+    TODO: add "wrap" setting - should it create an unfilled subplot (as it currently does), or make the last subplot smaller?
+    """
+    n_figs = int(np.ceil(len(labels) / (nrows * ncols)))
+
+    outs = np.array(
+        [
+            plt.subplots(nrows=nrows, ncols=ncols, **subplots_kwargs)
+            for i in range(n_figs)
+        ]
+    )
+
+    figs = outs[:, 0]
+    axs = np.stack(outs[:, 1])
+
+    axs_dict = {l: ax for l, ax in zip(labels, axs.ravel()[: len(labels)])}
+
+    # set remaining axes off
+    for ax in axs.ravel()[len(labels):]:
+        ax.set_axis_off()
+
+    return figs, axs, axs_dict

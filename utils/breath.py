@@ -15,6 +15,8 @@ from scipy.stats import gaussian_kde
 import matplotlib.pyplot as plt
 from matplotlib.collections import LineCollection
 
+from .umap import loc_relative as umap__loc_relative
+
 
 def segment_breaths(
     breathing_unfilt,
@@ -213,9 +215,34 @@ def plot_breath_callback_trial(
     return ax
 
 
-def fit_breath_distribution(breath, kde_points=100):
+def get_kde_distribution(data, xlim=None, xsteps=100, x_dist=None, **kwargs):
     """
-    For a breath waveform, constructs a smoothed distribution using a Kernel Density Estimate (KDE), extracts the inspiratory and expiratory peaks, then takes zero point threshold as the trough between those peaks.
+    TODO: docstring
+
+    """
+
+    data = np.array(data)
+
+    # Perform Kernel Density Estimation (KDE) to create a smooth distribution
+    kde = gaussian_kde(data, **kwargs)
+
+    # Sample from kde distribution
+    if x_dist is None:
+        if xlim is None:
+            xlim = (data.min(), data.max())
+
+        # Generate evenly spaced x-values covering the range of the breath data
+        x_dist = np.linspace(*xlim, xsteps)
+
+    # return sampled distr
+    y_dist = kde(x_dist)
+
+    return kde, x_dist, y_dist
+
+
+def fit_breath_distribution(breath, **kde_kwargs):
+    """
+    For 1d data, constructs a smoothed distribution using a Kernel Density Estimate (KDE), extracts the inspiratory and expiratory peaks, then takes zero point threshold as the trough between those peaks.
 
     The function identifies the two most prominent peaks in the pressure amplitude distribution of a breath waveform, and the minimum (trough) value between those peaks. Additionally, it returns a spline fit of the pressure distribution.
 
@@ -224,8 +251,8 @@ def fit_breath_distribution(breath, kde_points=100):
     breath : array-like
         The breath waveform data (pressure amplitude distribution).
 
-    kde_points : int, optional, default=100
-        The number of points used for generating the Kernel Density Estimate (KDE) distribution.
+
+    **kde_kwargs: kwargs for computing sampled kde distribution (see get_kde_distribution)
 
     Returns:
     -------
@@ -245,12 +272,7 @@ def fit_breath_distribution(breath, kde_points=100):
         and expiratory peaks).
     """
 
-    # Generate evenly spaced x-values covering the range of the breath data
-    x_dist = np.linspace(breath.min(), breath.max(), kde_points)
-
-    # Perform Kernel Density Estimation (KDE) to create a smooth distribution
-    kde = gaussian_kde(breath)
-    dist_kde = kde(x_dist)
+    kde, x_dist, dist_kde = get_kde_distribution(breath, **kde_kwargs)
 
     # Identify the indices of all peaks in the KDE distribution
     peak_indices = find_peaks(dist_kde)[0]
@@ -488,3 +510,64 @@ def get_first_breath_segment(
         raise ValueError(f"Unknown unit: {return_unit}")
 
     return earliest_call
+
+
+def get_phase(
+    breathDur,
+    avgExpDur,
+    avgInspDur,
+    wrap=True,
+):
+    """
+    python implementation of ziggy phase computation code ("phase2.m")
+
+    Note: algorithm errors on breathDur > 2 normal breath lengths (for consistency with ZK code)
+
+    breathDur: time between preceding expiration & event for which to compute phase - usually onset of call expiration. (formerly t_nMin1Exp_to_Call)
+    avgExpDur: duration of expiration for comparison (in same unit as breathDur). Usually, this is the mean duration of non-call expirations. breathDur in [0, avgExpDur] (time) is mapped to [0, pi].  breathDur in [0, avgExpDur] (time) is mapped to [0, pi].
+    avgInspDur: duration of inspiration for comparison (in same unit as breathDur). Usually, this is the mean duration of non-call inspirations. breathDur in [0, avgExpDur] (time) is mapped to [0, pi].  breathDur in [avgExpDur, avgExpDur+avgInspDur] (time) is mapped to [pi, 2pi].
+    wrap: Behavior for breaths longer than average breath. If True, computes based on (breathDur MOD avgDur) - ie, constrains to 2pi. If False, breathDur longer than avgBreathDur return phase greater than 2pi. Default True (as in ZK implementation).
+    """
+
+    phase = None
+
+    avgBreathDur = avgExpDur + avgInspDur
+    dur_ratio = breathDur / avgBreathDur  # get it? duration ratio?
+
+    assert (
+        dur_ratio <= 2
+    ), "algorithm only implmented for callT within 2 normal breath lengths!"
+
+    if wrap:
+        n = 0
+    else:
+        n = 2 * np.pi * np.floor(dur_ratio)
+
+    breathDur = breathDur % avgBreathDur
+
+    # call happens before the expiration before the call... (ie, oops)
+    if breathDur < 0:
+        phase = 0.1
+
+    # call happens during this expiration
+    elif breathDur < avgExpDur:
+        # expiration is [0, pi]
+        phase = np.pi * (breathDur / avgExpDur)
+
+    # call happens during inspiration after that
+    elif breathDur >= avgExpDur and breathDur < avgBreathDur:
+        # inspiration is [pi, 2pi]
+        phase = np.pi * (1 + (breathDur - avgExpDur) / avgInspDur)
+
+    else:
+        ValueError("this really shouldn't happen...")
+
+    return n + phase
+
+
+def loc_relative(*args, **kwargs):
+    """
+    alias for utils.umap > loc_relative()
+    """
+
+    return umap__loc_relative(*args, **kwargs)
