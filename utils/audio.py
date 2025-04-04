@@ -103,13 +103,21 @@ class AudioObject:
 
         audio, fs = load_cbin(filename, channel=channel)
 
-        new_obj = cls(
-            audio,
-            fs,
-            **kwargs,
-        )
+        n_channels = audio.shape[0]
 
-        new_obj.file = filename
+        if audio.ndim == 1 or n_channels == 1:
+            new_obj = cls(audio, fs, **kwargs)
+            new_obj.file = filename
+
+        else:
+            # if multiple channels, create a new object for each channel
+            # and return a list of objects
+
+            new_obj = [None] * n_channels
+
+            for i in range(n_channels):
+                new_obj[i] = cls(audio[i, :], fs, **kwargs)
+                new_obj[i].file = filename
 
         return new_obj
 
