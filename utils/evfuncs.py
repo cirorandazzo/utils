@@ -180,7 +180,15 @@ def load_cbin(filename, channel=0):
     data = np.fromfile(filename, dtype=">i2")
     recfile = os.path.splitext(filename)[0] + ".rec"
     rec_dict = readrecf(recfile)
-    data = data[channel :: rec_dict["num_channels"]]  # step by number of channels
+    n_channels = rec_dict["num_channels"]
+
+    data = data.reshape((-1, n_channels)).T
+
+    if channel == "all":
+        pass
+    else:
+        data = data[channel, :]
+
     sample_freq = rec_dict["sample_freq"]
     return data, sample_freq
 
