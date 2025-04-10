@@ -277,20 +277,30 @@ def plot_embedding_data(
         cbar_label = f"{plot_type} (ms, stim_aligned)"
 
     elif plot_type in ["clusters", "cluster", "clusterer"]:
-        assert (
-            "clusterer" in kwargs.keys()
-        ), "clusterer must be provided as kwarg for 'clusters' plot type."
-        clusterer = kwargs.pop("clusterer")
 
-        vmin, vmax = min(clusterer.labels_), max(clusterer.labels_) + 1
+        if "clusterer" in kwargs.keys():
+            if c is not None:
+                raise ValueError(
+                    "c and clusterer cannot be used together. Use either c or clusterer."
+                )
+            else:
+                clusterer = kwargs.pop("clusterer")
+                c = clusterer.labels_
+        else:
+            if c is None:
+                raise ValueError(
+                    "c must be provided for cluster plot. Use either c or clusterer."
+                )
+
+        vmin, vmax = min(c), max(c) + 1
         cmap = get_discrete_cmap(
             vmin=vmin, vmax=vmax, set_bad=set_bad, cmap_name=cmap_name
         )
 
-        plot_type_kwargs = dict(c=clusterer.labels_, cmap=cmap)
+        plot_type_kwargs = dict(c=c, cmap=cmap)
         cbar_label = "cluster"
 
-        labels = sorted(np.unique(clusterer.labels_))
+        labels = sorted(np.unique(c))
 
         cbar_ticks = labels
         cbar_tick_labels = labels
