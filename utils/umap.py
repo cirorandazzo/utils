@@ -114,13 +114,14 @@ def plot_embedding_data(
     embedding_name,
     df=None,
     ax=None,
-    plot_type="putative_call",
+    plot_type=None,
     c=None,
     show_colorbar=True,
     cmap_name=None,
     scatter_kwargs=None,
     set_kwargs=None,
     set_bad=None,
+    cmap_alpha=1,
     **kwargs,
 ):
     """
@@ -131,13 +132,14 @@ def plot_embedding_data(
     - embedding_name: Name of the embedding.
     - df: DataFrame containing metadata for color mapping. Order should match embedding. Can be all_breaths or all_trials.
     - ax: The axis object to plot on. If None, a new figure is created.
-    - plot_type: Type of plot to generate (e.g., "putative_call", "amplitude", etc.). Deals with selecting relevant field from df & particulars of colormap. Ignored if kwarg "c" is given.
-    - c: Directly give colors for mapping. 
+    - plot_type: Type of plot to generate (e.g., "putative_call", "amplitude", etc.). Deals with selecting relevant field from df (if c is not given) & particulars of colormap (whether or not c is given; eg, discrete colormap).
+    - c: Directly give colors for mapping.
     - show_colorbar: Whether to display a colorbar.
     - cmap_name: Colormap to use. Default is None, which uses a predefined mapping. You can alternatively pass an actual cmap to kwargs, maybe.
     - scatter_kwargs: Additional arguments for the scatter plot.
     - set_kwargs: Settings for plot appearance (e.g., axis labels).
     - set_bad: Settings for "bad" values in the colormap (default is None). Also applies to masked clusters for cluster plot type.
+    - cmap_alpha: Alpha value for the colormap (default is 1). If None, defaults to alpha in scatter_kwargs.
     - **kwargs: Additional keyword arguments for specific plot types.
 
     Returns:
@@ -180,7 +182,12 @@ def plot_embedding_data(
         cmap_name = default_cmaps.get(plot_type, "viridis")
 
     # Plot specific handling based on plot_type
-    if c is not None:
+    if plot_type is None:
+        if c is None:
+            raise ValueError(
+                "plot_type must be provided if c is not given. Use either plot_type or c."
+            )
+
         # Manually defined color labels
         plot_type_kwargs = dict(c=c, cmap=plt.get_cmap(cmap_name))
 
@@ -317,8 +324,13 @@ def plot_embedding_data(
     ax.set(**set_kwargs)
 
     # colorbar
-    if show_colorbar and "cbar_label" in vars():
+    if show_colorbar:
         cbar = plt.colorbar(sc, ax=ax)
+
+        if cmap_alpha is not None:
+            cbar.solids.set(alpha=cmap_alpha)
+
+    if "cbar_label" in vars():
         cbar.set_label(cbar_label)
 
     if "cbar_ticks" in vars():
