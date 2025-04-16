@@ -571,3 +571,81 @@ def loc_relative(*args, **kwargs):
     """
 
     return umap__loc_relative(*args, **kwargs)
+
+
+def get_segment_duration(trial, df, rel_index=[-2, -1]):
+    """
+    Get the total duration of breath segments in rel_index (where
+    current == 0).
+
+    Eg, for an expiration (n=0), default [-2, -1] will return the
+    duration of the previous expiration and previous inspiration.
+    (-2 = prev exp, -1 = prev insp).
+    """
+
+    # duration for: [prev exp, prev insp]
+    durations = np.array(
+        [
+            loc_relative(*trial.name, df, field="duration_s", i=i, default=np.nan)
+            for i in rel_index
+        ]
+    )
+
+    return durations.sum()
+
+
+def plot_duration_distribution(
+    all_breaths,
+    hist_kwargs=None,
+    kde_kwargs=None,
+    mean_kwargs=None,
+):
+    """
+    Plot duration distributions for each type of breath in input df.
+
+    Useful for getting a sense of whether mean represents a good estimate for phase calculations.
+
+    In that case, it's recommended to reject putative call breaths before running.
+    """
+    fig, axs = plt.subplots(nrows=len(all_breaths["type"].unique()), sharex=True)
+
+    # plotting parameters from kwargs
+    default_hist_kwargs = dict(density=True)
+    default_kde_kwargs = dict()
+    default_mean_kwargs = dict(c="r", linewidth=0.5, linestyle="--")
+
+    if hist_kwargs is None:
+        hist_kwargs = {}    
+    hist_kwargs = {**default_hist_kwargs, **hist_kwargs}
+
+    if kde_kwargs is None:
+        kde_kwargs = {}
+    kde_kwargs = {**default_kde_kwargs, **kde_kwargs}
+
+    if mean_kwargs is None:
+        mean_kwargs = {}
+    mean_kwargs = {**default_mean_kwargs, **mean_kwargs}
+
+
+    # plot each type in separate ax
+    for (type, breaths), ax in zip(all_breaths.groupby("type"), axs):
+        data = breaths["duration_s"]
+        title = f"{type} (n={len(data)})"
+
+        # plot histogram
+        ax.hist(data, bins=np.linspace(0, 1.6, 200), label="data", **hist_kwargs)
+        ax.set(title=title, ylabel="density")
+
+        # plot spline fit distribution
+        kde, x_kde, y_kde = get_kde_distribution(data, xlim=(0, 1.6), xsteps=200)
+        ax.plot(x_kde, y_kde, label="kde", **kde_kwargs)
+
+        # plot mean (vertical line)
+        ax.axvline(x=np.mean(data), label="mean", **mean_kwargs)
+
+    fig.tight_layout()
+
+    axs[0].legend()
+    ax.set(xlim=[-0.01, 0.6], xlabel="duration_s")
+
+    return fig, axs
