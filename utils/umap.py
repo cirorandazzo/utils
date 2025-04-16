@@ -6,6 +6,7 @@ import numpy as np
 import pandas as pd
 
 import matplotlib.pyplot as plt
+from matplotlib.collections import LineCollection
 from matplotlib.colors import ListedColormap, Normalize, to_rgba
 
 import hdbscan
@@ -423,10 +424,17 @@ def plot_cluster_traces_pipeline(
     if padding_kwargs is None:
         padding_kwargs = {}
 
-    try:
+    if isinstance(df, (pd.DataFrame, pd.Series)):
         raw_traces = df[trace_type]
-    except KeyError:
+    else:
+        # df is probably a numpy array: use as is
         raw_traces = df
+        padding_kwargs = {**padding_kwargs, "pad_method": None}
+
+        if select != "all":
+            raise ValueError(
+                "select must be 'all' if dircetly passing a numpy array. Use pandas DataFrame or Series for other selections."
+            )
 
     traces, aligned_at_f = stack_traces(traces=raw_traces, **padding_kwargs)
 
@@ -484,7 +492,7 @@ def stack_traces(
     Stack and align traces in a DataFrame, padding or cutting them as needed.
 
     Parameters:
-    - traces: DataFrame or Series containing the traces to stack.
+    - traces: DataFrame or Series containing the traces to stack. Also accepts numpy arrays for compatibility (however, pad_method must be None).
     - pad_method: Method for padding/cutting ("end", "beginning", "offset", "aligned", "index").
     - max_length: Maximum length for padding or cutting. If None, the longest trace is used.
     - i_align: The index to align traces to if padding/cutting method requires it.
@@ -496,10 +504,16 @@ def stack_traces(
     """
 
     # === use traces as-is (requires same length)
-    if pad_method is None:
-        assert (
-            len(set(traces.apply(len))) == 1
-        ), "All traces must be the same length to run with `pad_method=None`!"
+    if pad_method is None or isinstance(traces, np.ndarray):
+
+        if isinstance(traces, pd.Series):
+            assert (
+                len(set(traces.apply(len))) == 1
+            ), "All traces must be the same length to run with `pad_method=None`!"
+        elif isinstance(traces, np.ndarray):
+            assert (
+                pad_method is None
+            ), "pad_method must be None if traces is a numpy array!"
 
     # === pad/cut at end (keep default alignment)
     elif pad_method == "end":
@@ -713,15 +727,16 @@ def plot_cluster_traces(
         traces = cluster_data[i_cluster]
         ax = axs[i_cluster]
 
-        # Plot the traces for the cluster
-        ax.plot(
-            x,
-            traces.T,
-            **plot_kwargs,
+        # Create LineCollection & add to axis
+        segments = np.stack(
+            [np.column_stack([x, trace]) for trace in traces],
+            axis=0,
         )
+        lc = LineCollection(segments, **plot_kwargs)
+        ax.add_collection(lc)
 
         # Plot the mean trace in red
-        ax.plot(x, traces.T.mean(axis=1), color="r", linewidth=1)
+        ax.plot(x, traces.mean(axis=0), color="r", linewidth=1)
 
         # Set the title with the number of traces in the cluster
         if select == "all" or all_labels is None:
@@ -748,7 +763,15 @@ def plot_cluster_traces(
             color=title_color,
         )
 
-        ax.set(**set_kwargs)
+        # LineCollection doesn't autoset limits; set them manually
+        # if not given in set_kwargs
+        ax.set(
+            **{
+                "xlim": [x.min(), x.max()],
+                "ylim": [traces.min(), traces.max()],
+                **set_kwargs,
+            }
+        )
 
     return axs
 
