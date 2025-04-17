@@ -661,9 +661,11 @@ def plot_traces_by_cluster_and_phase(
     phase_bins,
     npy_breath_channel=0,
     cluster_col_name="cluster",
+    alignment_col_name="start_s",
     ncols=4,
     figsize=(11, 8.5),
     plot_axis_lines=True,
+    max_traces=500,
     trace_kwargs=None,
     axline_kwarg=None,
 ):
@@ -690,6 +692,8 @@ def plot_traces_by_cluster_and_phase(
         Size of each figure in inches. Default is (11, 8.5).
     plot_axis_lines : bool, optional
         Whether to include horizontal and vertical axis lines in each subplot. Default is True.
+    max_traces : int, optional
+        Cluster/phase combo with more traces than this will simply plot mean trace +/- std for memory reasons.  
     trace_kwargs : dict, optional
         Keyword arguments passed to `matplotlib.pyplot.plot` for the traces.
     axline_kwarg : dict, optional
@@ -746,18 +750,34 @@ def plot_traces_by_cluster_and_phase(
                 (phases > st_ph) & (phases <= en_ph)
             ]
             traces = calls_in_phase.apply(
-                get_wav_snippet_from_numpy, axis=1, args=[window_fr, fs, trace_folder, npy_breath_channel]
+                get_wav_snippet_from_numpy, axis=1, args=[window_fr, fs, trace_folder, npy_breath_channel, alignment_col_name]
             )
 
             if plot_axis_lines:
                 ax.axhline(**axline_kwarg)
                 ax.axvline(**axline_kwarg)
 
-            if len(traces) != 0:
-                traces = np.vstack(traces.loc[traces.notnull()])
+            if len(traces) != 0 and not all(traces.isnull()):
+                traces = traces.loc[traces.notnull()]
+                traces = np.vstack(traces)
+                mean = traces.mean(axis=0)
 
-                ax.plot(x, traces.T, **trace_kwargs)
-                ax.plot(x, traces.mean(axis=0), color="r")
+                # if too many traces, plot mean +/- std
+                if traces.shape[0] > max_traces:
+                    std = traces.std(axis=0)
+
+                    ax.fill_between(
+                        x,
+                        mean - std,
+                        mean + std,
+                        alpha=0.2,
+                        color="k",
+                        label="$\pm$ std",
+                    )
+                else:
+                    ax.plot(x, traces.T, **trace_kwargs)
+
+                ax.plot(x, mean, color="r")
 
             ax.set(
                 title=f"({st_ph:.2f},{en_ph:.2f}], n={traces.shape[0]}",
@@ -776,6 +796,7 @@ def get_wav_snippet_from_numpy(
     fs,
     trace_folder,
     channel=None,
+    alignment_col_name="start_s",
     error_value=pd.NA,
 ):
     """
@@ -790,8 +811,9 @@ def get_wav_snippet_from_numpy(
     breath = np.load(np_file)
 
     # get indices
-    onset = int(fs * breath_trial["start_s"])
-    ii = np.arange(*window_fr) + onset
+    # alignment_point_fr: usually onset or offset of this breath, in frames (0=file start)
+    alignment_point_fr = int(fs * breath_trial[alignment_col_name])
+    ii = np.arange(*window_fr) + alignment_point_fr
 
     try:
         # select channel
