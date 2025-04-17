@@ -659,6 +659,7 @@ def plot_traces_by_cluster_and_phase(
     window_s,
     trace_folder,
     phase_bins,
+    npy_breath_channel=0,
     cluster_col_name="cluster",
     ncols=4,
     figsize=(11, 8.5),
@@ -745,7 +746,7 @@ def plot_traces_by_cluster_and_phase(
                 (phases > st_ph) & (phases <= en_ph)
             ]
             traces = calls_in_phase.apply(
-                get_wav_snippet_from_numpy, axis=1, args=[window_fr, fs, trace_folder]
+                get_wav_snippet_from_numpy, axis=1, args=[window_fr, fs, trace_folder, npy_breath_channel]
             )
 
             if plot_axis_lines:
@@ -774,6 +775,7 @@ def get_wav_snippet_from_numpy(
     window_fr,
     fs,
     trace_folder,
+    channel=None,
     error_value=pd.NA,
 ):
     """
@@ -792,6 +794,13 @@ def get_wav_snippet_from_numpy(
     ii = np.arange(*window_fr) + onset
 
     try:
-        return breath[ii]
-    except IndexError:
+        # select channel
+        if channel is None or breath.squeeze().ndim == 1:
+            breath = breath[ii]
+        else:
+            breath = breath[channel, ii]
+
+        return breath
+    
+    except IndexError:  # usually: this breath occurs at start/end of file
         return error_value
