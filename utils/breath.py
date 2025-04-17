@@ -7,8 +7,11 @@
 # recenter based on mean(pre-stim breaths)
 
 import warnings
+from pathlib import Path
 
 import numpy as np
+import pandas as pd
+
 from scipy.signal import find_peaks, peak_prominences
 from scipy.stats import gaussian_kde
 
@@ -615,7 +618,7 @@ def plot_duration_distribution(
     default_mean_kwargs = dict(c="r", linewidth=0.5, linestyle="--")
 
     if hist_kwargs is None:
-        hist_kwargs = {}    
+        hist_kwargs = {}
     hist_kwargs = {**default_hist_kwargs, **hist_kwargs}
 
     if kde_kwargs is None:
@@ -625,7 +628,6 @@ def plot_duration_distribution(
     if mean_kwargs is None:
         mean_kwargs = {}
     mean_kwargs = {**default_mean_kwargs, **mean_kwargs}
-
 
     # plot each type in separate ax
     for (type, breaths), ax in zip(all_breaths.groupby("type"), axs):
@@ -649,3 +651,147 @@ def plot_duration_distribution(
     ax.set(xlim=[-0.01, 0.6], xlabel="duration_s")
 
     return fig, axs
+
+
+def plot_traces_by_cluster_and_phase(
+    df_breaths,
+    fs,
+    window_s,
+    trace_folder,
+    phase_bins,
+    cluster_col_name="cluster",
+    ncols=4,
+    figsize=(11, 8.5),
+    plot_axis_lines=True,
+    trace_kwargs=None,
+    axline_kwarg=None,
+):
+    """
+    Plot waveform traces grouped by cluster and phase bins.
+
+    Parameters
+    ----------
+    df_breaths : pd.DataFrame
+        DataFrame containing metadata for each trace. Must include a 'phase' column and a cluster identifier column.
+    fs : int or float
+        Sampling frequency (Hz).
+    window_s : tuple of float
+        Time window around the event to extract (start_time, end_time) in seconds.
+    trace_folder : str
+        Path to the folder containing trace data files.
+    phase_bins : list or array-like
+        Sequence of bin edges for phase segmentation. Should include both start and end.
+    cluster_col_name : str, optional
+        Column name for cluster labels in `df_breaths`. Default is "cluster".
+    ncols : int, optional
+        Number of columns in the subplot grid. Default is 4.
+    figsize : tuple, optional
+        Size of each figure in inches. Default is (11, 8.5).
+    plot_axis_lines : bool, optional
+        Whether to include horizontal and vertical axis lines in each subplot. Default is True.
+    trace_kwargs : dict, optional
+        Keyword arguments passed to `matplotlib.pyplot.plot` for the traces.
+    axline_kwarg : dict, optional
+        Keyword arguments passed to `axhline` and `axvline` for drawing axis lines.
+
+    Returns
+    -------
+    figs : dict
+        Dictionary mapping cluster labels to their corresponding matplotlib Figure objects.
+    """
+
+    figs = {}
+
+    n_bins = len(phase_bins) - 1
+    window_fr = (fs * window_s).astype(int)
+    x = np.linspace(*window_s, np.ptp(window_fr))
+
+    # default plot kwargs
+    default_trace_kwargs = dict(
+        linewidth=0.1,
+        color="k",
+        alpha=0.4,
+    )
+    if trace_kwargs is None:
+        trace_kwargs = {}
+    trace_kwargs = {**default_trace_kwargs, **trace_kwargs}
+
+    default_axline_kwarg = dict(
+        linewidth=1,
+        color="tab:blue",
+    )
+    if axline_kwarg is None:
+        axline_kwarg = {}
+    axline_kwarg = {**default_axline_kwarg, **axline_kwarg}
+
+    # plot by cluster
+    for cluster, df_cluster_breaths in df_breaths.groupby(cluster_col_name):
+        phases = df_cluster_breaths["phase"]
+
+        fig, axs = plt.subplots(
+            figsize=figsize,
+            ncols=ncols,
+            nrows=np.ceil(n_bins / ncols).astype(int),
+            sharex=True,
+            sharey=True,
+        )
+
+        for st_ph, en_ph, ax in zip(
+            phase_bins[:-1],
+            phase_bins[1:],
+            axs.ravel()[:n_bins],
+        ):
+            calls_in_phase = df_cluster_breaths.loc[
+                (phases > st_ph) & (phases <= en_ph)
+            ]
+            traces = calls_in_phase.apply(
+                get_wav_snippet_from_numpy, axis=1, args=[window_fr, fs, trace_folder]
+            )
+
+            if plot_axis_lines:
+                ax.axhline(**axline_kwarg)
+                ax.axvline(**axline_kwarg)
+
+            if len(traces) != 0:
+                traces = np.vstack(traces.loc[traces.notnull()])
+
+                ax.plot(x, traces.T, **trace_kwargs)
+                ax.plot(x, traces.mean(axis=0), color="r")
+
+            ax.set(
+                title=f"({st_ph:.2f},{en_ph:.2f}], n={traces.shape[0]}",
+                xlim=window_s,
+            )
+
+        fig.suptitle(f"Cluster: {cluster} (n={len(df_cluster_breaths)} call exps)")
+
+        figs[cluster] = fig
+    return figs
+
+
+def get_wav_snippet_from_numpy(
+    breath_trial,
+    window_fr,
+    fs,
+    trace_folder,
+    error_value=pd.NA,
+):
+    """
+    Given the breath in "breath_trial", load a requested window from a preprocessed numpy file. Window is centered on breath onset, with "post" time including breath length.
+
+    Presumes numpy file is in trace_folder, which contain .npy copies of the .wav file in breath_trial.name sans folder structure.
+    """
+
+    # get file
+    wav_file = breath_trial.name[0]
+    np_file = trace_folder.joinpath(Path(wav_file).stem + ".npy")
+    breath = np.load(np_file)
+
+    # get indices
+    onset = int(fs * breath_trial["start_s"])
+    ii = np.arange(*window_fr) + onset
+
+    try:
+        return breath[ii]
+    except IndexError:
+        return error_value
