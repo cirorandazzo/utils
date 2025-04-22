@@ -15,7 +15,7 @@ from .file import parse_birdname
 from .plot import remap_cmap
 
 
-def get_call_exps(all_breaths, exclude_song=True, return_index=False):
+def get_call_segments(all_breaths, segment_type="exp", exclude_song=True, return_index=False):
     """
     from df all_breaths, return only rows that contain call expirations
 
@@ -26,33 +26,41 @@ def get_call_exps(all_breaths, exclude_song=True, return_index=False):
     the next call & excludes these when exclude_song = True
     """
 
-    ii_exp = all_breaths["type"] == "exp"
+    ii_type = all_breaths["type"] == segment_type
     ii_call = all_breaths["putative_call"]
+
+    # i_rel: how many segments away syll exp might be
+    if segment_type == "exp":
+        i_rel = [-2, 2]
+    elif segment_type == "insp":
+        i_rel = [-1, 3]
+    else:
+        raise ValueError(f"Unrecognized segment_type: {segment_type}. Must be `insp` or `exp`.")
 
     # exclude song: if the prev/next exp also surpassed amplitude threshold, it's probably song.
     if exclude_song:
         kwargs = dict(df=all_breaths, field="putative_call", default=False)
 
-        ii_prev_call = all_breaths.apply(
-            lambda x: loc_relative(
-                *x.name, all_breaths, i=-2, field="putative_call", default=False
+        ii_song = all_breaths.apply(
+            lambda x: any(
+                [
+                    loc_relative(
+                        *x.name,
+                        all_breaths,
+                        i=i,
+                        field="putative_call",
+                        default=False,
+                    )
+                    for i in i_rel
+                ]
             ),
             axis=1,
         )
-
-        ii_next_call = all_breaths.apply(
-            lambda x: loc_relative(
-                *x.name, all_breaths, i=2, field="putative_call", default=False
-            ),
-            axis=1,
-        )
-
-        ii_song = ii_prev_call | ii_next_call
 
     else:
         ii_song = np.zeros_like(ii_call)
 
-    ii_call_exp = ii_exp & ii_call & ~ii_song
+    ii_call_exp = ii_type & ii_call & ~ii_song
 
     if return_index:
         return ii_call_exp
