@@ -15,38 +15,41 @@ from .file import parse_birdname
 from .plot import remap_cmap
 
 
-def get_call_segments(all_breaths, segment_type="exp", exclude_song=True, return_index=False):
+def get_call_segments(df, type="exp", exclude_song=True, return_index=False):
     """
-    from df all_breaths, return only rows that contain call expirations
+    from df, return only rows that: 
+        (1) are part of a putative call breath cycle
+        (2) have the correct type ("exp" for call expiration; "insp" for directly preceding inspiration)
+        (3) probably aren't song (ie, aren't directly followed by another "call") - unlikely to have calls on subsequent breaths
 
-    if return_index is True, returns a boolean pd.Series with index matching all_breaths (instead of df)
+    if return_index is True, returns a boolean pd.Series with index matching all_breaths. Else, returns relevant rows of passed dataframe.
 
     NOTE: this code didn't consider call status of subsequent call before
     refactor; so, first syll was presumably included. refactor considers
     the next call & excludes these when exclude_song = True
     """
 
-    ii_type = all_breaths["type"] == segment_type
-    ii_call = all_breaths["putative_call"]
+    ii_type = df["type"] == type
+    ii_call = df["putative_call"]
 
     # i_rel: how many segments away syll exp might be
-    if segment_type == "exp":
+    if type == "exp":
         i_rel = [-2, 2]
-    elif segment_type == "insp":
+    elif type == "insp":
         i_rel = [-1, 3]
     else:
-        raise ValueError(f"Unrecognized segment_type: {segment_type}. Must be `insp` or `exp`.")
+        raise ValueError(f"Unrecognized segment_type: {type}. Must be `insp` or `exp`.")
 
-    # exclude song: if the prev/next exp also surpassed amplitude threshold, it's probably song.
+    # if the prev/next exp also surpassed amplitude threshold, it's probably song.
     if exclude_song:
-        kwargs = dict(df=all_breaths, field="putative_call", default=False)
 
-        ii_song = all_breaths.apply(
+        # check whether each breath seg of interest is also a call 
+        ii_song = df.apply(
             lambda x: any(
                 [
                     loc_relative(
                         *x.name,
-                        all_breaths,
+                        df,
                         i=i,
                         field="putative_call",
                         default=False,
@@ -65,7 +68,7 @@ def get_call_segments(all_breaths, segment_type="exp", exclude_song=True, return
     if return_index:
         return ii_call_exp
     else:
-        return all_breaths.loc[ii_call_exp]
+        return df.loc[ii_call_exp]
 
 
 def get_time_since_stim(x, all_trials):
