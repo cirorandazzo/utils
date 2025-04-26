@@ -68,7 +68,7 @@ class AudioObject:
     def from_wav(
         cls,
         filename,
-        channels=0,
+        channel=0,
         channel_names=None,
         **kwargs,
     ):
@@ -80,21 +80,25 @@ class AudioObject:
 
         fs, audio = wavfile.read(filename)
 
-        if channels == "all":
-            channels = np.arange(audio.shape[1])
+        if "channels" in kwargs.keys():
+            channel = kwargs.pop("channels")
+            raise Warning("`channels` has been renamed channel.")
+
+        if channel == "all":
+            channel = np.arange(audio.shape[1])
         else:
-            channels = np.array([channels]).flatten()
+            channel = np.array([channel]).flatten()
 
         if channel_names is None:
-            channel_names = [None] * len(channels)
+            channel_names = [None] * len(channel)
         else:
             assert len(channel_names) == len(
-                channels
-            ), f"Loading {len(channels)} channels, but only {len(channel_names)} channel_names given."
+                channel
+            ), f"Loading {len(channel)} channels, but only {len(channel_names)} channel_names given."
 
         objs = []
 
-        for i, c in enumerate(channels):
+        for i, c in enumerate(channel):
             new_obj = cls(
                 audio[:, c],
                 fs,
