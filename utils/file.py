@@ -1,6 +1,8 @@
 # file.py
 #
 
+import re
+
 
 def multi_index_from_dict(df, index_dict, keep_current_index=True):
     """
@@ -210,6 +212,21 @@ def parse_birdname(
     """
     Cuts out typical bird identifier from a string. Default format: AA#(#)AA#(#), where A is a letter, # is an obligate number, and (#) is an optional number.
     """
-    import re
+    matches = re.findall(birdname_regex, string)
 
-    return re.search(birdname_regex, string)[0]
+    if len(matches) == 0:
+        raise BirdNameException(f"Could not parse birdname from string: {string}")
+
+    # assert there's a single unique match
+    matches = list(set(matches))
+
+    if len(matches) > 1:
+        raise BirdNameException(
+            f"Found multiple birdname matches in string: {string}. Matches: {' | '.join(matches)}"
+        )
+    else:
+        return matches[0]
+
+
+class BirdNameException(ValueError):
+    pass
