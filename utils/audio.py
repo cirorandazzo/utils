@@ -1,3 +1,5 @@
+from pathlib import Path
+
 import numpy as np
 from scipy.io import wavfile
 from scipy.signal import butter, filtfilt, ShortTimeFFT
@@ -7,6 +9,7 @@ from sklearn.preprocessing import minmax_scale
 import matplotlib.pyplot as plt
 
 from .evfuncs import load_cbin
+
 
 class AudioObject:
     def __init__(
@@ -39,6 +42,27 @@ class AudioObject:
             self.make_spectrogram()
         else:
             self.spectrogram = None
+
+    @classmethod
+    def from_file(
+        cls,
+        filename,
+        **kwargs,
+    ):
+        """
+        Tries to determine file type from filename and call relevant loader.
+        """
+
+        ext = str(Path(filename).suffix).lower()
+
+        if ext == ".wav":
+            return cls.from_wav(filename=filename, **kwargs)
+        elif ext == ".cbin":
+            return cls.from_cbin(filename=filename, **kwargs)
+        elif ext == "":
+            raise ValueError("Received a directory! Must receive an audio file.")
+        else:
+            raise ValueError(f"Unknown file extension: {ext}")
 
     @classmethod
     def from_wav(
