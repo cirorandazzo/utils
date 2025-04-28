@@ -4,4 +4,5 @@
 from .breath import *  # misfits
 from .phase import *
 from .plot import *
+from .preprocess import *
 from .segment import *
