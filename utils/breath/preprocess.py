@@ -1,10 +1,11 @@
 # utils.breath.preprocess
-# 
+#
 # for loading raw data into useful data structures
 
-import os
+from multiprocessing import Pool
 from pathlib import Path
 import pickle
+import time
 
 import numpy as np
 import pandas as pd
@@ -22,6 +23,7 @@ from utils.file import parse_birdname
 
 from utils.video import get_triggers_from_audio
 
+
 def preprocess_files(
     files,
     output_folder,
@@ -31,160 +33,50 @@ def preprocess_files(
     has_stims=True,
     stim_length=0.1,
     output_exist_ok=False,
+    n_jobs=4,
 ):
     """
-    Generalized preprocessing script for audio and breath data.
-
-    Args:
-        input_folder (str): Path to the input folder containing `wav` or `cbin` files.
-        output_folder (str): Path to the output folder for processed `npy` files.
-        prefix (str): string to prepend to output files.
-        fs (int): Sample rate for processing.
-        channel_map (dict): Mapping of channels, e.g., {'audio': 0, 'breath': 1}.
-        file_type (str, optional): file type to look for in `input_folder`. default: "wav"
-        has_stims (bool, optional): whether to expect stim triggers in file. If true, looks for stim triggers (requires channel_map["stim"]. Errors if no triggers are found.) If false, presumes each recording is a single trial. default: True
-        stim_length (float, optional): length of stimuli in seconds. default: 0.1
-        output_exist_ok (bool, optional):
-
+    Generalized preprocessing script for audio and breath data using multiprocessing.
     """
+    st = time.time()  # timer
+    print(f"======Starting {prefix} ({len(files)} files)======")
+
     # Ensure output folder exists
     output_folder = Path(output_folder)
     output_folder.mkdir(parents=True, exist_ok=output_exist_ok)
-
-    # Initialize containers
-    all_files = []
-    all_breaths = []
-    errors = {}
 
     # Butterworth filter parameters
     bw = dict(N=2, Wn=50, btype="low")
     b_br, a_br = butter(**bw, fs=fs)
 
-    for i, file in enumerate(files):
-        file = Path(file)
-        print(f"{i + 1}/{len(files)}, Processing {file.name}...")
-
-        try:
-            # Load audio and breath channels
-            aos = AudioObject.from_file(file, channel="all")
-            ao_audio = aos[channel_map["audio"]]
-            ao_breath = aos[channel_map["breath"]]
-
-            assert (
-                ao_audio.fs == fs
-            ), f"Wrong sample rate! Expected {fs}, but file {file} had fs={ao_audio.fs}"
-
-            # TODO: optionally filter audio
-            audio = ao_audio.audio
-
-            # Filter breath
-            ao_breath.filtfilt(b_br, a_br)
-            breath = ao_breath.audio_filt
-
-            # Center and normalize breath
-            x_dist, _, trough_ii, amplitude_ii = fit_breath_distribution(
-                breath,
-            )
-            zero_point, insp_peak = x_dist[[trough_ii, min(amplitude_ii)]]
-            breath -= zero_point
-            breath /= abs(insp_peak)  # formerly: abs(np.min(breath))
-
-            # Segment breaths
-            exps, insps = segment_breaths(
-                breath,
-                fs,
-                threshold=lambda x: 0,
-                do_filter=False,  # already filtered
-            )
-
-            # Create .notmat-like structure
-            onsets, offsets, labels = make_notmat_vars(
-                exps, insps, len(breath), exp_label="exp", insp_label="insp"
-            )
-            onsets, offsets = onsets / fs, offsets / fs
-
-            # Get stims (or dummy stim)
-            if has_stims:
-                # read stim triggers from correct channel
-                stim_channel = channel_map["stim"]
-                stims = (
-                    get_triggers_from_audio(
-                        aos[stim_channel].audio, crossing_direction="down"
-                    )
-                    / fs
+    # multiprocess files
+    with Pool(n_jobs) as pool:
+        results = pool.starmap(
+            preprocess_file,
+            [
+                (
+                    file,
+                    fs,
+                    channel_map,
+                    has_stims,
+                    stim_length,
+                    output_folder,
+                    b_br,
+                    a_br,
                 )
+                for file in files
+            ],
+        )
 
-                if len(stims) == 0:
-                    raise NoStimulusError("Didn't find any stimuli!")
-            else:
-                # Treat each file as a single trial
-                stims = np.array([0.0])
+    # Collect results
+    all_files = []
+    all_breaths = []
+    errors = {}
 
-            # mimic .not.mat format (for call_mat_stim_trial_loader)
-            data = {
-                "onsets": np.concatenate([onsets, stims]) * 1000,
-                "offsets": np.concatenate([offsets, stims + stim_length]) * 1000,
-                "labels": np.concatenate([labels, ["Stimulus"] * len(stims)]),
-            }
-
-            # Generate calls and trials dataframes
-            calls, stim_trials, _, _, _ = call_mat_stim_trial_loader(
-                file=None,
-                data=data,
-                from_notmat=True,
-                verbose=False,
-                acceptable_call_labels=["Stimulus", "exp", "insp"],
-            )
-
-            calls.drop(columns=["ici"], inplace=True)
-
-            # drop stimulus from calls df
-            calls = calls.loc[calls["type"] != "Stimulus"]
-
-            # Add metadata
-            calls["amplitude"] = calls.apply(
-                _get_amplitude,
-                axis=1,
-                args=[fs, breath],
-            )
-
-            # TODO: add putative call
-            # putative call
-            #   - exps: amplitude
-            #   - insps: next exp (shift index; assert type)
-            #
-            # putative song
-            #   - exps: if this is call and -2 or +2 is a call, putative song.
-            #   - insps: if this is call and -1 or +3 (exp) is a call, putative song.
-
-            # TODO: add stim phase to stim_trials (if has_stims is True)
-
-            stim_trials["n_putative_calls"] = calls[calls["amplitude"] > 1.1].shape[0]
-
-            stim_trials["breath_zero_point"] = zero_point
-
-            # Save processed data as .npy
-            np_file = output_folder.joinpath(file.stem + ".npy")
-            np.save(np_file, np.vstack([audio, breath]))
-
-            # save filenames
-            calls["audio_filename"] = str(file)
-            calls["numpy_filename"] = str(np_file)
-
-            stim_trials["audio_filename"] = str(file)
-            stim_trials["numpy_filename"] = str(np_file)
-
-            # Add birdname
-            try:
-                birdname = parse_birdname(file.name)
-            except ValueError as e:
-                # if parsing fails, leave birdname blank
-                birdname = ""
-
-            calls["birdname"] = birdname
-            stim_trials["birdname"] = birdname
-
-            # Append to containers
+    for stim_trials, calls, error in results:
+        if error:
+            errors[error[0]] = error[1]
+        else:
             all_files.append(
                 stim_trials.reset_index().set_index(["audio_filename", "stims_index"])
             )
@@ -192,16 +84,11 @@ def preprocess_files(
                 calls.reset_index().set_index(["audio_filename", "calls_index"])
             )
 
-            print(f"\tSuccess!")
-
-        except Exception as e:
-            errors[str(file)] = e
-            print(f"\tError: {e}")
-            continue
-
     # Merge dataframes
-    all_files = pd.concat(all_files).sort_index()
-    all_breaths = pd.concat(all_breaths).sort_index()
+    if all_files:
+        all_files = pd.concat(all_files).sort_index()
+    if all_breaths:
+        all_breaths = pd.concat(all_breaths).sort_index()
 
     # Save metadata
     with open(output_folder.joinpath(f"{prefix}-all_files.pickle"), "wb") as f:
@@ -215,6 +102,132 @@ def preprocess_files(
 
     print(f"Processing complete! {len(all_files)} files processed successfully.")
     print(f"{len(errors)} files encountered errors.")
+    print(f"Elapsed time: {st - time.time()}")
+    print(f"======Finished {prefix}!======\n")
+
+    return all_files, all_breaths
+
+
+def preprocess_file(
+    file,
+    fs,
+    channel_map,
+    has_stims,
+    stim_length,
+    output_folder,
+    b_br,
+    a_br,
+):
+    """
+    Helper function to process a single file. This will be used with multiprocessing. See preprocess_files for parameter descriptions.
+    """
+    try:
+        file = Path(file)
+        print(f"Processing {file.name}...")
+
+        # Load audio and breath channels
+        aos = AudioObject.from_file(file, channel="all")
+        ao_audio = aos[channel_map["audio"]]
+        ao_breath = aos[channel_map["breath"]]
+
+        assert (
+            ao_audio.fs == fs
+        ), f"Wrong sample rate! Expected {fs}, but file {file} had fs={ao_audio.fs}"
+
+        # Filter breath
+        ao_breath.filtfilt(b_br, a_br)
+        breath = ao_breath.audio_filt
+
+        # Center and normalize breath
+        x_dist, _, trough_ii, amplitude_ii = fit_breath_distribution(breath)
+        zero_point, insp_peak = x_dist[[trough_ii, min(amplitude_ii)]]
+
+        # TODO: test 2 unimodal distributions, splitting the amplitude distribution @ zero_point (ie, unimodal insp & exp, respectiely)
+
+        breath -= zero_point
+        breath /= abs(insp_peak)
+
+        # Segment breaths
+        exps, insps = segment_breaths(
+            breath,
+            fs,
+            threshold=lambda x: 0,
+            do_filter=False,  # already filtered
+        )
+
+        # Create .notmat-like structure
+        onsets, offsets, labels = make_notmat_vars(
+            exps, insps, len(breath), exp_label="exp", insp_label="insp"
+        )
+        onsets, offsets = onsets / fs, offsets / fs
+
+        # Get stims (or dummy stim)
+        if has_stims:
+            stim_channel = channel_map["stim"]
+            stims = (
+                get_triggers_from_audio(
+                    aos[stim_channel].audio, crossing_direction="down"
+                )
+                / fs
+            )
+
+            if len(stims) == 0:
+                raise NoStimulusError("Didn't find any stimuli!")
+        else:
+            stims = np.array([0.0])
+
+        # mimic .not.mat format (for call_mat_stim_trial_loader)
+        data = {
+            "onsets": np.concatenate([onsets, stims]) * 1000,
+            "offsets": np.concatenate([offsets, stims + stim_length]) * 1000,
+            "labels": np.concatenate([labels, ["Stimulus"] * len(stims)]),
+        }
+
+        # Generate calls and trials dataframes
+        calls, stim_trials, _, _, _ = call_mat_stim_trial_loader(
+            file=None,
+            data=data,
+            from_notmat=True,
+            verbose=False,
+            acceptable_call_labels=["Stimulus", "exp", "insp"],
+        )
+
+        calls.drop(columns=["ici"], inplace=True)
+        calls = calls.loc[calls["type"] != "Stimulus"]
+
+        # Add metadata
+        calls["amplitude"] = calls.apply(
+            _get_amplitude,
+            axis=1,
+            args=[fs, breath],
+        )
+
+        stim_trials["n_putative_calls"] = calls[calls["amplitude"] > 1.1].shape[0]
+        stim_trials["breath_zero_point"] = zero_point
+
+        # Save processed data as .npy
+        np_file = Path(output_folder).joinpath(file.stem + ".npy")
+        np.save(np_file, np.vstack([ao_audio.audio, breath]))
+
+        # Save filenames
+        calls["audio_filename"] = str(file)
+        calls["numpy_filename"] = str(np_file)
+        stim_trials["audio_filename"] = str(file)
+        stim_trials["numpy_filename"] = str(np_file)
+
+        # Add birdname
+        try:
+            birdname = parse_birdname(file.name)
+        except ValueError:
+            birdname = ""
+
+        calls["birdname"] = birdname
+        stim_trials["birdname"] = birdname
+
+        return stim_trials, calls, None  # No error
+
+    except Exception as e:
+        return None, None, (str(file), e)  # Return error info
 
 
 def _get_amplitude(x, fs, breath):
@@ -241,4 +254,3 @@ class NoStimulusError(LookupError):
     """
 
     pass
-
