@@ -46,7 +46,7 @@ def get_triggers_from_audio(
         if np.isscalar(allowable_range):  # just one number
             check = r <= allowable_range
         else:
-            check = (r >= allowable_range[0] & r <= allowable_range[1]).all()
+            check = (r >= allowable_range[0]) and (r <= allowable_range[1])
 
         assert (
             check
