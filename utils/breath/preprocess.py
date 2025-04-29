@@ -50,6 +50,7 @@ def preprocess_files(
     b_br, a_br = butter(**bw, fs=fs)
 
     # multiprocess files
+    print("Starting multiprocessing pool...")
     with Pool(n_jobs) as pool:
         results = pool.starmap(
             preprocess_file,
@@ -67,6 +68,16 @@ def preprocess_files(
                 for file in files
             ],
         )
+
+
+        print(f"Finished processing files! ({time.time() - st}s since start)")
+        print(f"Trying to join...")
+        
+        pool.close()
+        pool.terminate()
+        
+    print(f"Pool closed. ({time.time() - st}s since start)")
+    print("Gathering results...")
 
     # Collect results
     all_files = []
@@ -102,7 +113,7 @@ def preprocess_files(
 
     print(f"Processing complete! {len(all_files)} files processed successfully.")
     print(f"{len(errors)} files encountered errors.")
-    print(f"Elapsed time: {st - time.time()}")
+    print(f"Elapsed time: {time.time() - st}")
     print(f"======Finished {prefix}!======\n")
 
     return all_files, all_breaths
@@ -166,7 +177,10 @@ def preprocess_file(
             stim_channel = channel_map["stim"]
             stims = (
                 get_triggers_from_audio(
-                    aos[stim_channel].audio, crossing_direction="down"
+                    aos[stim_channel].audio,
+                    crossing_direction="down",
+                    threshold_function=lambda x: 1000,
+                    allowable_range=30000,
                 )
                 / fs
             )
