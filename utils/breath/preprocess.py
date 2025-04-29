@@ -231,7 +231,7 @@ def preprocess_file(
 
         # Add birdname
         try:
-            birdname = parse_birdname(file.name)
+            birdname = parse_birdname(str(file.parent))  # formerly: file.name. but parent usually includes a birdname folder
         except ValueError:
             birdname = ""
 
@@ -241,6 +241,7 @@ def preprocess_file(
         return stim_trials, calls, None  # No error
 
     except Exception as e:
+        print(f"ERROR: {file.name}. ({e}).")
         return None, None, (str(file), e)  # Return error info
 
 
