@@ -180,7 +180,7 @@ def preprocess_file(
                     aos[stim_channel].audio,
                     crossing_direction="down",
                     threshold_function=lambda x: 1000,
-                    allowable_range=30000,
+                    allowable_range=[fs/2, np.inf],  # range for allowable # of frames between subsequent stims.
                 )
                 / fs
             )
