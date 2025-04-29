@@ -207,7 +207,7 @@ def parse_parameter_from_string(
 
 def parse_birdname(
     string,
-    birdname_regex=r"([a-z]{1,2}[0-9]{1,2}){2}",
+    birdname_regex=r"(?:[a-z]{1,2}[0-9]{1,2}){2}",
 ):
     """
     Cuts out typical bird identifier from a string. Default format: AA#(#)AA#(#), where A is a letter, # is an obligate number, and (#) is an optional number.
