@@ -24,6 +24,40 @@ from utils.file import parse_birdname
 from utils.video import get_triggers_from_audio
 
 
+def load_datasets(datasets, file_format):
+    """
+    Load multiple datasets which have been created during preprocess_files.
+
+    file_format look something like this: r"M:\randazzo\breathing\processed\{dataset}\{dataset}-{file}.pickle"
+
+    where {dataset} will be filled iteratively with the elements in datasets, and {file} will be filled with "all_files" and "all_breaths"
+
+    """
+
+    all_files = []
+    all_breaths = []
+
+    for dataset in datasets:
+        all_files_path = file_format.format(dataset=dataset, file="all_files")
+        all_breaths_path = file_format.format(dataset=dataset, file="all_breaths")
+
+        with open(all_files_path, "rb") as f:
+            files = pickle.load(f)
+            files["dataset"] = dataset
+
+        with open(all_breaths_path, "rb") as f:
+            breaths = pickle.load(f)
+            breaths["dataset"] = dataset
+
+        all_files.append(files)
+        all_breaths.append(breaths)
+
+    all_files = pd.concat(all_files).sort_index()
+    all_breaths = pd.concat(all_breaths).sort_index()
+
+    return all_files, all_breaths
+
+
 def preprocess_files(
     files,
     output_folder,
@@ -53,7 +87,7 @@ def preprocess_files(
     print("Starting multiprocessing pool...")
     with Pool(n_jobs) as pool:
         results = pool.starmap(
-            preprocess_file,
+            preprocess_single_file,
             [
                 (
                     file,
@@ -69,13 +103,12 @@ def preprocess_files(
             ],
         )
 
-
         print(f"Finished processing files! ({time.time() - st}s since start)")
         print(f"Trying to join...")
-        
+
         pool.close()
         pool.terminate()
-        
+
     print(f"Pool closed. ({time.time() - st}s since start)")
     print("Gathering results...")
 
@@ -119,7 +152,7 @@ def preprocess_files(
     return all_files, all_breaths
 
 
-def preprocess_file(
+def preprocess_single_file(
     file,
     fs,
     channel_map,
@@ -180,7 +213,10 @@ def preprocess_file(
                     aos[stim_channel].audio,
                     crossing_direction="down",
                     threshold_function=lambda x: 1000,
-                    allowable_range=[fs/2, np.inf],  # range for allowable # of frames between subsequent stims.
+                    allowable_range=[
+                        fs / 2,
+                        np.inf,
+                    ],  # range for allowable # of frames between subsequent stims.
                 )
                 / fs
             )
@@ -231,7 +267,9 @@ def preprocess_file(
 
         # Add birdname
         try:
-            birdname = parse_birdname(str(file.parent))  # formerly: file.name. but parent usually includes a birdname folder
+            birdname = parse_birdname(
+                str(file.parent)
+            )  # formerly: file.name. but parent usually includes a birdname folder
         except ValueError:
             birdname = ""
 
