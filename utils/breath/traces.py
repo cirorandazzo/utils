@@ -67,9 +67,9 @@ def cut_segment(
     segment = data[start_idx:end_idx]
 
     # Interpolate to normalized length
-    if interpolate_length:
+    if interpolate_length is not None:
         l = len(data)
-        np.interp(
+        segment = np.interp(
             np.linspace(0, l, interpolate_length),
             np.arange(l),
             data,
@@ -124,7 +124,7 @@ def process_all_segments(
             data = np.load(file)[data_row, :]
 
             print(f"\tMaking inputs... [total elapsed: {time.time() - st}s]")
-            input = [
+            input = [  # goes into _load_segment_multiproc
                 (
                     data,
                     record,
@@ -159,15 +159,17 @@ def process_all_segments(
 
 def _load_segment_multiproc(input):
     """
-    input should contain, for each record:
-    - data
-    - record
-    - fs
-    - interpolate_length
-    - pad_frames
+    input should contain information on a single record as an array. In order:
+    - data: np array of entire file
+    - record: pd.DataFrame.to_dict("record") of a single row
+    - fs: sample rate
+    - interpolate_length: see cut_segment
+    - pad_frames: see cut_segment
+
+    cut_segment(data, row, fs, interpolate_length=None, pad_frames=[0, 0])
     """
 
-    _, record, _, _, _ = input
+    data, record, fs, interpolate_length, pad_frames = input
     name = [record[c] for c in ["audio_filename", "calls_index"]]
 
     try:
@@ -175,5 +177,13 @@ def _load_segment_multiproc(input):
         exc = None
     except Exception as exc:
         segment = np.nan
+
+    # # Report
+    # if exc is None:
+    #     shape = segment.shape
+    # else:
+    #     shape = "nan"
+
+    # print(f"\t\t- {record['calls_index']}\t | {shape} \t | {exc}")
 
     return (name, segment, exc)
