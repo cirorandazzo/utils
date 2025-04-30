@@ -5,6 +5,29 @@ import numpy as np
 import pandas as pd
 
 
+def load_segment(
+    row,
+    fs=None,
+    **cut_segment_kwargs,
+):
+    """
+    Given a row of all_breaths df, return the (appropriately processed) trace. Useful for 1 trial (or standard loops).
+
+    row: df row.
+    fs: sample rate. if none, tries to fetch from row["fs"]
+    **cut_segment_kwargs: kwargs passed on to cut_segment, which handles the logic + processing of traces
+    """
+
+    if fs is None:
+        fs = row["fs"]
+
+    data = np.load(row["numpy_filename"])
+
+    segment = cut_segment(data, row, fs, **cut_segment_kwargs)
+
+    return segment
+
+
 def cut_segment(
     data,
     row,
