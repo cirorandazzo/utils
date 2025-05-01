@@ -24,13 +24,16 @@ from utils.file import parse_birdname
 from utils.video import get_triggers_from_audio
 
 
-def load_datasets(datasets, file_format):
+def load_datasets(datasets, file_format, fs_dataset=None):
     """
     Load multiple datasets which have been created during preprocess_files.
 
     file_format look something like this: r"M:\randazzo\breathing\processed\{dataset}\{dataset}-{file}.pickle"
 
     where {dataset} will be filled iteratively with the elements in datasets, and {file} will be filled with "all_files" and "all_breaths"
+
+
+    fs_dataset is a dict of the format {dataset_name: fs}. if it's passed, adds column "fs" to relevant rows in all_files/all_breaths
 
     """
 
@@ -54,6 +57,11 @@ def load_datasets(datasets, file_format):
 
     all_files = pd.concat(all_files).sort_index()
     all_breaths = pd.concat(all_breaths).sort_index()
+
+    # add fs
+    if fs_dataset is not None:
+        all_files["fs"] = all_files.dataset.map(fs_dataset)
+        all_breaths["fs"] = all_breaths.dataset.map(fs_dataset)
 
     return all_files, all_breaths
 
