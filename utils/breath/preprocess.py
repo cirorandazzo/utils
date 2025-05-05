@@ -197,7 +197,7 @@ def preprocess_single_file(
         # TODO: test 2 unimodal distributions, splitting the amplitude distribution @ zero_point (ie, unimodal insp & exp, respectiely)
 
         breath -= zero_point
-        breath /= abs(insp_peak)
+        breath /= (abs(insp_peak) - zero_point)
 
         # Segment breaths
         exps, insps = segment_breaths(
@@ -260,7 +260,8 @@ def preprocess_single_file(
             args=[fs, breath],
         )
 
-        stim_trials["n_putative_calls"] = calls[calls["amplitude"] > 1.1].shape[0]
+        # TODO: implement putative calls. figure out thresholding for new normalization
+        # stim_trials["n_putative_calls"] = calls[calls["amplitude"] > 1.1].shape[0]
         stim_trials["breath_zero_point"] = zero_point
 
         # Save processed data as .npy
