@@ -191,7 +191,7 @@ def preprocess_single_file(
         breath = ao_breath.audio_filt
         
         # test amplitude distr bimodality
-        dipstat = diptest.diptest(breath)
+        dip_stat, dip_pval = diptest.diptest(breath)
 
         # Center and normalize breath
         x_dist, _, trough_ii, amplitude_ii = fit_breath_distribution(breath)
@@ -267,7 +267,8 @@ def preprocess_single_file(
         # stim_trials["n_putative_calls"] = calls[calls["amplitude"] > 1.1].shape[0]
         stim_trials["breath_zero_point"] = zero_point
         stim_trials["insp_peak"] = insp_peak
-        stim_trials["dipstat"] = dipstat
+        stim_trials["dipstat"] = dip_stat
+        stim_trials["dip_pval"] = dip_pval
 
         # Save processed data as .npy
         np_file = Path(output_folder).joinpath(file.stem + ".npy")
