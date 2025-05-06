@@ -8,6 +8,7 @@ import matplotlib.pyplot as plt
 from matplotlib.collections import LineCollection
 
 from .breath import get_wav_snippet_from_numpy
+from .preprocess import fit_breath_distribution
 from .segment import get_kde_distribution
 
 
@@ -403,3 +404,44 @@ def plot_traces_by_cluster_and_phase(
 
         figs[cluster] = fig
     return figs
+
+
+def plot_trace_amplitude_distribution(trace, hist_bins=200, ax=None):
+    """
+    plot amplitude histograms w/ spline fit + normalization points of interest. return ax & the amplitude of these POIs
+    """
+    if ax is None:
+        fig, ax = plt.subplots()
+
+    # plot hist
+    hist, edges = np.histogram(trace, bins=hist_bins, density=True)
+    ax.stairs(hist, edges, fill=True)
+
+    # plot spline fit
+    x_dist, dist_kde, trough_ii, peaks_ii = fit_breath_distribution(trace)
+    ax.plot(x_dist, dist_kde, color="k")
+
+    # plot POIs from spline fit
+    points = peaks_ii + [trough_ii]
+
+    scatter_kwargs = dict(color="r", marker="+", s=100, linewidth=2, zorder=3)
+    vlines_kwargs = dict(color="r", linewidth=1, linestyle="--")
+
+    ax.scatter(  # mark trough between those peaks
+        x_dist[points],
+        dist_kde[points],
+        label="peaks & threshold",
+        **scatter_kwargs,
+    )
+
+    ax.vlines(  # add vertical lines from points to x axis
+        x_dist[points],
+        ymin=0,
+        ymax=dist_kde[points],
+        **vlines_kwargs,
+    )
+
+    # axis labels
+    ax.set(xlabel="breath amplitude", ylabel="density")
+
+    return ax, sorted(x_dist[points])
