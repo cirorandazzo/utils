@@ -11,17 +11,17 @@ import numpy as np
 import pandas as pd
 from scipy.signal import butter
 
+import diptest
+
 from .segment import (
     fit_breath_distribution,
     segment_breaths,
 )
 from .breath import make_notmat_vars
-from ..audio import AudioObject
 
-from utils.callbacks import call_mat_stim_trial_loader
-from utils.file import parse_birdname
-
-from utils.video import get_triggers_from_audio
+from ..audio import AudioObject, get_triggers_from_audio
+from ..callbacks import call_mat_stim_trial_loader
+from ..file import parse_birdname
 
 
 def load_datasets(datasets, file_format, fs_dataset=None):
@@ -189,15 +189,18 @@ def preprocess_single_file(
         # Filter breath
         ao_breath.filtfilt(b_br, a_br)
         breath = ao_breath.audio_filt
+        
+        # test amplitude distr bimodality
+        dipstat = diptest.diptest(breath)
 
         # Center and normalize breath
         x_dist, _, trough_ii, amplitude_ii = fit_breath_distribution(breath)
         zero_point, insp_peak = x_dist[[trough_ii, min(amplitude_ii)]]
-
-        # TODO: test 2 unimodal distributions, splitting the amplitude distribution @ zero_point (ie, unimodal insp & exp, respectiely)
-
+        
+        # Normalize breath
         breath -= zero_point
-        breath /= (abs(insp_peak) - zero_point)
+        insp_peak = insp_peak - zero_point  # rel. to new zero
+        breath /= abs(insp_peak)
 
         # Segment breaths
         exps, insps = segment_breaths(
@@ -263,6 +266,8 @@ def preprocess_single_file(
         # TODO: implement putative calls. figure out thresholding for new normalization
         # stim_trials["n_putative_calls"] = calls[calls["amplitude"] > 1.1].shape[0]
         stim_trials["breath_zero_point"] = zero_point
+        stim_trials["insp_peak"] = insp_peak
+        stim_trials["dipstat"] = dipstat
 
         # Save processed data as .npy
         np_file = Path(output_folder).joinpath(file.stem + ".npy")
