@@ -406,7 +406,7 @@ def plot_traces_by_cluster_and_phase(
     return figs
 
 
-def plot_trace_amplitude_distribution(trace, hist_bins=200, ax=None):
+def plot_trace_amplitude_distribution(trace, hist_bins=200, kde_bins=100, ax=None):
     """
     plot amplitude histograms w/ spline fit + normalization points of interest. return ax & the amplitude of these POIs
     """
@@ -418,7 +418,7 @@ def plot_trace_amplitude_distribution(trace, hist_bins=200, ax=None):
     ax.stairs(hist, edges, fill=True)
 
     # plot spline fit
-    x_dist, dist_kde, trough_ii, peaks_ii = fit_breath_distribution(trace)
+    x_dist, dist_kde, trough_ii, peaks_ii = fit_breath_distribution(trace, xsteps=kde_bins)
     ax.plot(x_dist, dist_kde, color="k")
 
     # plot POIs from spline fit
