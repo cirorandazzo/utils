@@ -6,6 +6,7 @@ from multiprocessing import Pool
 from pathlib import Path
 import pickle
 import time
+import warnings
 
 import numpy as np
 import pandas as pd
@@ -24,7 +25,13 @@ from ..callbacks import call_mat_stim_trial_loader
 from ..file import parse_birdname
 
 
-def load_datasets(datasets, file_format, fs_dataset=None):
+def load_datasets(
+    datasets,
+    file_format,
+    fs_dataset=None,
+    assertions=True,
+    return_rejected=False,
+):
     """
     Load multiple datasets which have been created during preprocess_files.
 
@@ -63,7 +70,40 @@ def load_datasets(datasets, file_format, fs_dataset=None):
         all_files["fs"] = all_files.dataset.map(fs_dataset)
         all_breaths["fs"] = all_breaths.dataset.map(fs_dataset)
 
-    return all_files, all_breaths
+    if assertions:
+        all_files, all_breaths, rejected = reject_files(all_files, all_breaths)
+    else:
+        rejected = None
+
+    if return_rejected:
+        return all_files, all_breaths, rejected
+    else:
+        return all_files, all_breaths
+
+
+def reject_files(all_files, all_breaths):
+    """
+    by default: restrict to files with:
+        - average respiratory rate in range [2, 5]Hz
+        - sufficient amplitude bimodality (hartigans dip stat > 0.025)
+    """
+
+    warnings.warn(f"Rejecting files!")
+
+    # reject from all_files
+    ii_good = (
+        (all_files.resp_rate_file_avg >= 2)
+        & (all_files.resp_rate_file_avg <= 5)
+        & (all_files.dipstat >= 0.025)
+    )
+    rejected = all_files.loc[~ii_good]
+    new_all_files = all_files.loc[ii_good]
+
+    # reject from all_breaths
+    good_files = all_files.index.get_level_values("audio_filename").unique()
+    new_all_breaths = all_breaths.loc[good_files]
+
+    return new_all_files, new_all_breaths, rejected
 
 
 def preprocess_files(
@@ -189,14 +229,14 @@ def preprocess_single_file(
         # Filter breath
         ao_breath.filtfilt(b_br, a_br)
         breath = ao_breath.audio_filt
-        
+
         # test amplitude distr bimodality
-        dip_stat, dip_pval = diptest.diptest(breath)
+        dip_stat = diptest.dipstat(breath)
 
         # Center and normalize breath
         x_dist, _, trough_ii, amplitude_ii = fit_breath_distribution(breath)
         zero_point, insp_peak = x_dist[[trough_ii, min(amplitude_ii)]]
-        
+
         # Normalize breath
         breath -= zero_point
         insp_peak = insp_peak - zero_point  # rel. to new zero
@@ -245,6 +285,7 @@ def preprocess_single_file(
         }
 
         # Generate calls and trials dataframes
+        # NOTE: `calls` df contains breaths. holdover from callback-analysis
         calls, stim_trials, _, _, _ = call_mat_stim_trial_loader(
             file=None,
             data=data,
@@ -265,10 +306,18 @@ def preprocess_single_file(
 
         # TODO: implement putative calls. figure out thresholding for new normalization
         # stim_trials["n_putative_calls"] = calls[calls["amplitude"] > 1.1].shape[0]
+
+        # useful information about the file
         stim_trials["breath_zero_point"] = zero_point
         stim_trials["insp_peak"] = insp_peak
         stim_trials["dipstat"] = dip_stat
-        stim_trials["dip_pval"] = dip_pval
+
+        n_breath_segs_per_file = len(calls)
+        file_length_s = len(breath) / fs
+
+        stim_trials["n_breath_segs_per_file"] = n_breath_segs_per_file
+        stim_trials["file_length_s"] = file_length_s
+        stim_trials["resp_rate_file_avg"] = n_breath_segs_per_file / (2 * file_length_s)
 
         # Save processed data as .npy
         np_file = Path(output_folder).joinpath(file.stem + ".npy")
