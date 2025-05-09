@@ -106,6 +106,34 @@ def reject_files(all_files, all_breaths):
     return new_all_files, new_all_breaths, rejected
 
 
+def TEMP_assert_file_quality(all_files, all_breaths):
+    """
+    TODO: remove this once preprocessing is rerun!
+    """
+
+    warnings.warn(
+        "Once preprocessing is re-run, function `TEMP_assert_file_quality` should be deleted! `new_cols` will be added at preprocessing time.\nAt that point, make sure to change `load_datasets` param `assertions` to True!",
+        DeprecationWarning,
+    )
+
+    new_cols = ["n_breath_segs_per_file", "file_length_s", "resp_rate_file_avg"]
+
+    assert not all(
+        [x in all_files.columns for x in new_cols]
+    )  # don't overwrite these if they're there
+
+    # add columns
+    n_breath_segs_per_file = all_breaths.end_s.groupby(by="audio_filename").agg(len)
+    file_length_s = all_breaths.end_s.groupby(by="audio_filename").agg(max)
+    all_files["n_breath_segs_per_file"] = n_breath_segs_per_file
+    all_files["file_length_s"] = file_length_s
+    all_files["resp_rate_file_avg"] = n_breath_segs_per_file / (2 * file_length_s)
+
+    all_files, all_breaths, _ = reject_files(all_files, all_breaths)
+
+    return all_files, all_breaths
+
+
 def preprocess_files(
     files,
     output_folder,
