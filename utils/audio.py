@@ -149,6 +149,23 @@ class AudioObject:
 
         return new_obj
 
+    @classmethod
+    def plot_file(cls, filename, channel="all"):
+        aos = cls.from_file(filename, channel=channel)
+
+        if not isinstance(aos, list):
+            aos = [aos]
+
+        fig, axs = plt.subplots(nrows=len(aos), sharex=True)
+
+        for ch, ax in zip(aos, axs):
+            ax.plot(ch.get_x(), ch.audio)
+
+        axs[0].set_title(filename, wrap=True)
+        axs[-1].set(xlabel="time (s)")
+
+        return fig, axs, aos
+
     def filtfilt(self, b, a):
         self.audio_filt = filtfilt(b, a, self.audio)
 
