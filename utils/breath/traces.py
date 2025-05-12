@@ -68,11 +68,11 @@ def cut_segment(
 
     # Interpolate to normalized length
     if interpolate_length is not None:
-        l = len(data)
+        l = len(segment)
         segment = np.interp(
             np.linspace(0, l, interpolate_length),
             np.arange(l),
-            data,
+            segment,
         )
 
     return segment
