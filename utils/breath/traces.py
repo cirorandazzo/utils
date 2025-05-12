@@ -72,7 +72,7 @@ def cut_segment(
         segment = np.interp(
             np.linspace(0, l, interpolate_length),
             np.arange(l),
-            data,
+            segment,
         )
 
     return segment
