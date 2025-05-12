@@ -253,7 +253,10 @@ def plot_embedding_data(
     set_kwargs = {**set_kwargs}  # Copy to avoid modifying input
 
     if "title" not in set_kwargs.keys():
-        set_kwargs["title"] = f"{embedding_name}: {plot_type.upper()}"
+        if plot_type is None:
+            set_kwargs["title"] = f"{embedding_name}"
+        else:
+            set_kwargs["title"] = f"{embedding_name}: {plot_type.upper()}"
 
     if cmap_name is None:
         # Default colormaps based on plot type
@@ -348,6 +351,15 @@ def plot_embedding_data(
         cbar_label = "bird_id"
         cbar_ticks = np.arange(n_birds)
         cbar_tick_labels = birdnames.unique()
+
+    elif plot_type == "dataset":
+        datasets = pd.Categorical(df["dataset"])
+        n_datasets = len(datasets.unique())
+        cmap = plt.get_cmap(cmap_name, n_datasets)
+
+        plot_type_kwargs = dict(c=datasets.codes, cmap=cmap)
+        cbar_ticks = np.arange(n_datasets)
+        cbar_tick_labels = datasets.unique()
         cbar_label = None
 
     elif plot_type in ["insp_onset", "insp_offset"]:
