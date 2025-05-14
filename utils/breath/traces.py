@@ -1,4 +1,6 @@
 from multiprocessing import Pool
+from pathlib import Path
+import pickle
 import time
 
 import numpy as np
@@ -83,6 +85,7 @@ def process_all_segments(
     data_row,
     interpolate_length,
     pad_frames,
+    pickle_save_directory=None,
     n_jobs=4,
 ):
     """
@@ -91,6 +94,9 @@ def process_all_segments(
     Args:
         df (pd.DataFrame): DataFrame containing segment metadata. Should include columns: [numpy_filename, fs, start_s, end_s]
         n_jobs (int): Number of parallel processes.
+
+        pickle_save_directory: Path to save a copy of df for each individual file. If None, skips saving individual files.
+            TODO: check whether this file's df exists; if so, use that to save some time.
 
         See `load_segment` for other arguments.
 
@@ -108,7 +114,7 @@ def process_all_segments(
     n_files = len(df["numpy_filename"].unique())
 
     # prepare output
-    out = []
+    all_df = []
 
     print("Starting pool...")
 
@@ -118,8 +124,9 @@ def process_all_segments(
         print(f"Pool started! [total elapsed: {time.time() - st}s]")
 
         for i, (file, df_file) in enumerate(df.groupby(by="numpy_filename")):
-
+            fstem = Path(file).stem
             print(f"File {i}/{n_files} started. [total elapsed: {time.time() - st}s]")
+            print(f"\t{fstem}")
 
             data = np.load(file)[data_row, :]
 
@@ -136,25 +143,36 @@ def process_all_segments(
             ]
 
             print(f"\tGetting traces... [total elapsed: {time.time() - st}s]")
-            file_out = pool.map(
+            out = pool.map(
                 _load_segment_multiproc,
                 input,
             )
 
-            out += file_out
-            print(f"\Finished file! [total elapsed: {time.time() - st}s]")
+            name, segments, errors = zip(*out)
+
+            idx = pd.MultiIndex.from_tuples(
+                name, names=("audio_filename", "calls_index")
+            )
+            df_file = pd.DataFrame(index=idx, data={"data": segments, "error": errors})
+
+            if pickle_save_directory is not None:
+                pickle_save_path = Path(pickle_save_directory) / f"{fstem}.pickle"
+                df_file.to_pickle(pickle_save_path)
+
+                print(f"\tSaved file df! [total elapsed: {time.time() - st}s]")
+                print(f"\tSave path: {pickle_save_path}")
+
+            all_df.append(df_file)
+            print(f"\tFinished file! [total elapsed: {time.time() - st}s]")
 
         print(f"Closing pool... [total elapsed: {time.time() - st}s]")
         pool.close()
         pool.join()
 
     print(f"Pool closed! Saving... [total elapsed: {time.time() - st}s]")
-    name, segments, errors = zip(*out)
 
     # return as a df
-    idx = pd.MultiIndex.from_tuples(name, names=("audio_filename", "calls_index"))
-
-    return pd.DataFrame(index=idx, data={"data": segments, "error": errors})
+    return pd.concat(all_df).sort_index()
 
 
 def _load_segment_multiproc(input):
@@ -172,11 +190,12 @@ def _load_segment_multiproc(input):
     data, record, fs, interpolate_length, pad_frames = input
     name = [record[c] for c in ["audio_filename", "calls_index"]]
 
+    exc = None
     try:
         segment = cut_segment(*input)
-        exc = None
-    except Exception as exc:
+    except Exception as e:
         segment = np.nan
+        exc = e
 
     # # Report
     # if exc is None:
@@ -187,3 +206,32 @@ def _load_segment_multiproc(input):
     # print(f"\t\t- {record['calls_index']}\t | {shape} \t | {exc}")
 
     return (name, segment, exc)
+
+
+def load_df_from_segments(
+    df, pickle_save_directory, filename_column="numpy_filename", skip_not_found=False
+):
+    """
+    Given trace dfs for individual files in df, return a merged df of traces.
+    """
+
+    # get all filenames
+    files = df[filename_column].unique()
+    data = []
+
+    # load individual file dfs
+    # named like df[filename_column], but in traces folder with extension .pickle
+    for fname in files:
+        try:
+            df_fname = Path(pickle_save_directory) / f"{Path(fname).stem}.pickle"
+
+            with open(df_fname, "rb") as f:
+                data.append(pickle.load(f))
+
+        except FileNotFoundError as e:
+            if not skip_not_found:
+                raise e
+
+    # return merged df
+    df = pd.concat(data).sort_index()
+    return df
