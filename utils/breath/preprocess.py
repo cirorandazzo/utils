@@ -125,9 +125,16 @@ def TEMP_assert_file_quality(all_files, all_breaths):
     # add columns
     n_breath_segs_per_file = all_breaths.end_s.groupby(by="audio_filename").agg(len)
     file_length_s = all_breaths.end_s.groupby(by="audio_filename").agg(max)
-    all_files["n_breath_segs_per_file"] = n_breath_segs_per_file
-    all_files["file_length_s"] = file_length_s
-    all_files["resp_rate_file_avg"] = n_breath_segs_per_file / (2 * file_length_s)
+    # %%
+    all_files["n_breath_segs_per_file"] = all_files.index.get_level_values(
+        "audio_filename"
+    ).map(n_breath_segs_per_file)
+    all_files["file_length_s"] = all_files.index.get_level_values("audio_filename").map(
+        file_length_s
+    )
+    all_files["resp_rate_file_avg"] = all_files.n_breath_segs_per_file / (
+        2 * all_files.file_length_s
+    )
 
     all_files, all_breaths, _ = reject_files(all_files, all_breaths)
 
