@@ -942,15 +942,12 @@ def prepare_clusters_axs_dict(labels, nrows=1, ncols=1, **subplots_kwargs):
     """
     n_figs = int(np.ceil(len(labels) / (nrows * ncols)))
 
-    outs = np.array(
-        [
-            plt.subplots(nrows=nrows, ncols=ncols, **subplots_kwargs)
-            for i in range(n_figs)
-        ]
-    )
+    outs = [
+        plt.subplots(nrows=nrows, ncols=ncols, **subplots_kwargs) for i in range(n_figs)
+    ]
 
-    figs = outs[:, 0]
-    axs = np.stack(outs[:, 1])
+    figs, axs = zip(*outs)
+    axs = np.stack(axs)
 
     axs_dict = {l: ax for l, ax in zip(labels, axs.ravel()[: len(labels)])}
 
