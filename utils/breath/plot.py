@@ -418,7 +418,9 @@ def plot_trace_amplitude_distribution(trace, hist_bins=200, kde_bins=100, ax=Non
     ax.stairs(hist, edges, fill=True)
 
     # plot spline fit
-    x_dist, dist_kde, trough_ii, peaks_ii = fit_breath_distribution(trace, xsteps=kde_bins)
+    x_dist, dist_kde, trough_ii, peaks_ii = fit_breath_distribution(
+        trace, xsteps=kde_bins
+    )
     ax.plot(x_dist, dist_kde, color="k")
 
     # plot POIs from spline fit
@@ -445,3 +447,70 @@ def plot_trace_amplitude_distribution(trace, hist_bins=200, kde_bins=100, ax=Non
     ax.set(xlabel="breath amplitude", ylabel="density")
 
     return ax, sorted(x_dist[points])
+
+
+def plot_histogram_by_bird_type_dset(
+    df_breaths,
+    column,
+    bins=None,
+    fig_kwargs=None,
+    hist_kwargs=None,
+    legend=True,
+):
+    """
+    Plot histograms for a specified column of all_breaths, grouped by bird, type, and dataset.
+
+    Parameters:
+        all_breaths (pd.DataFrame): DataFrame containing breath data.
+        column (str): The column to plot histograms for.
+        bins (array-like, optional): Bins to use for the histograms. If None, computed from data.
+
+    Returns:
+        plots: dict. Structure: {birdname (string): (plt.Figure, [plt.axs])}
+    """
+
+    if fig_kwargs is None:
+        fig_kwargs = {}
+
+    fig_kwargs = {**dict(sharex=True, figsize=(4, 7)), **fig_kwargs}
+
+    if hist_kwargs is None:
+        hist_kwargs = {}
+
+    hist_kwargs = {**dict(histtype="step", density=False), **hist_kwargs}
+
+    plots = {}
+
+    for bird, df_bird in df_breaths.groupby(by="birdname"):
+        fig, axs = plt.subplots(nrows=df_bird.type.nunique(), **fig_kwargs)
+        fig.suptitle(bird)
+
+        plots[bird] = (fig, axs)
+
+        for ax, (type, df_type) in zip(axs, df_bird.groupby(by="type")):
+            ax.set(title=f"{type}")
+
+            for dataset, dset_df in df_type.groupby(by="dataset"):
+                if bins is None:
+                    data_bins = np.linspace(
+                        dset_df[column].min(), dset_df[column].max(), 100
+                    )
+                else:
+                    data_bins = bins
+
+                ax.hist(
+                    dset_df[column],
+                    label=dataset,
+                    bins=data_bins,
+                    **hist_kwargs,
+                )
+
+        axs[0].set(
+            ylabel="density (# breaths)" if hist_kwargs["density"] else "breath count"
+        )
+        axs[-1].set(xlabel=column)
+
+    if legend:
+        axs[-1].legend()
+
+    return plots
