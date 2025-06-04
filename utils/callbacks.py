@@ -37,7 +37,7 @@ def call_mat_stim_trial_loader(
     else:
         data = read_mat(file)
 
-    calls = _read_calls_from_mat(data, from_notmat=from_notmat)
+    calls = read_calls_from_mat(data, from_notmat=from_notmat)
     file_info = _read_file_info_from_mat(data, from_notmat=from_notmat)
 
     calls.index.name = calls_index_name
@@ -97,9 +97,9 @@ def make_calls_df_from_notmat(
 
     data = read_mat(file)
 
-    return _read_calls_from_mat(data, from_notmat=True)
+    return read_calls_from_mat(data, from_notmat=True)
 
-def _read_calls_from_mat(
+def read_calls_from_mat(
     data,
     from_notmat,
 ):
@@ -112,8 +112,8 @@ def _read_calls_from_mat(
 
     if from_notmat:
         calls = pd.DataFrame()
-        calls["start_s"] = data["onsets"] / 1000
-        calls["end_s"] = data["offsets"] / 1000
+        calls["start_s"] = np.atleast_1d(data["onsets"]) / 1000
+        calls["end_s"] = np.atleast_1d(data["offsets"]) / 1000
         calls["duration_s"] = calls["end_s"] - calls["start_s"]
         calls["type"] = [ESA_LOOKUP.get(l, l) for l in data["labels"]]
 
