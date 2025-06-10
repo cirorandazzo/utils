@@ -5,6 +5,11 @@
 #
 # Renamed callbacks.py from deepsqueak.py
 
+import numpy as np
+import pandas as pd
+
+from pymatreader import read_mat
+
 ESA_LOOKUP = {"c": "Call", "s": "Stimulus", "n": "Song", "z": "Song"}
 
 
@@ -22,10 +27,6 @@ def call_mat_stim_trial_loader(
     """
     Given (1) a .mat from DeepSqueak, (2) a .not.mat from evsonganaly, or (3) a dictionary which looks like loaded data from one of these, make a trial-by-trial dataframe of callbacks.
     """
-    import numpy as np
-    import pandas as pd
-
-    from pymatreader import read_mat
 
     if verbose:
         print(f"Reading file: {file}")
@@ -84,38 +85,36 @@ def call_mat_stim_trial_loader(
 
     return calls, stim_trials, rejected_trials, file_info, call_types
 
-def make_calls_df_from_notmat(
-    file,
-):
+
+def make_calls_df_from_notmat(file):
     """
     Wrapper function for accessibility. Read calls from an evsonganaly .not.mat file into calls_df structure.
 
     Useful if you don't want to do more callback pipeline steps (eg, in the case of spontaneous recordings.)
     """
-    
-    from pymatreader import read_mat
 
     data = read_mat(file)
 
     return read_calls_from_mat(data, from_notmat=True)
 
+
 def read_calls_from_mat(
     data,
     from_notmat,
+    notmat_lookup_dict=ESA_LOOKUP,
 ):
     """
     Reads calls from a .mat containing callback labels (either deepsqueak or evsonganaly .not.mat)
-    """
 
-    import numpy as np
-    import pandas as pd
+    notmat_lookup_dict: if loading from a notmat file, replace 1-character code with a name (eg: "c":"Call"). Pass empty dict to maintain
+    """
 
     if from_notmat:
         calls = pd.DataFrame()
         calls["start_s"] = np.atleast_1d(data["onsets"]) / 1000
         calls["end_s"] = np.atleast_1d(data["offsets"]) / 1000
         calls["duration_s"] = calls["end_s"] - calls["start_s"]
-        calls["type"] = [ESA_LOOKUP.get(l, l) for l in data["labels"]]
+        calls["type"] = [notmat_lookup_dict.get(l, l) for l in data["labels"]]
 
     else:
         assert "Calls" in data.keys()
@@ -142,8 +141,6 @@ def _read_file_info_from_mat(
     """
     Reads file metadata from a .mat containing callback labels (either deepsqueak or evsonganaly .not.mat)
     """
-    import numpy as np
-    import pandas as pd
 
     if from_notmat:
         # TODO: deal with file info
@@ -173,8 +170,6 @@ def construct_stim_trial_df(
     """
     TODO: document
     """
-    import pandas as pd
-    import numpy as np
 
     stims = calls[calls["type"] == stim_type_label]
 
@@ -247,8 +242,6 @@ def _get_calls_in_range(calls, range_start, range_end, exclude_stimulus=True):
 
     NOTE: range is exclusive to prevent inclusion of next stimulus, since range_end is defined by start of next stimulus
     """
-    import numpy as np
-    import pandas as pd
 
     # either start or end in range is sufficient.
     time_in_range = lambda t: (t > range_start) & (t < range_end)
@@ -280,8 +273,6 @@ def _get_call_times(trial, calls_df, stimulus_aligned=True):
     given one row/trial from stim_trials df and calls df, get on/off times for all calls in that trial. if stim_aligned is True, timings are adjusted to set stimulus onset as 0.
     """
 
-    import numpy as np
-
     call_ii = trial["calls_in_range"]
 
     call_times_stim_aligned = np.array(
@@ -303,8 +294,6 @@ def reject_stim_trials(
     """
     Given stim-aligned dataframe, exclude all trials with call types other than those in acceptable_call_labels)
     """
-    import numpy as np
-    import pandas as pd
 
     call_types = stim_trials["calls_in_range"].apply(
         lambda x: calls["type"].loc[x].value_counts()
@@ -321,3 +310,5 @@ def reject_stim_trials(
     stim_trials = stim_trials[~to_reject]
 
     return stim_trials, rejected_trials, call_types
+
+
