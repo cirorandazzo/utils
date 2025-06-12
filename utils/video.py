@@ -7,52 +7,7 @@
 import numpy as np
 import cv2 as cv
 
-
-def get_triggers_from_audio(
-    audio: np.ndarray,
-    threshold_function=lambda x: 10 * np.mean(x),
-    crossing_direction="up",
-    allowable_range=None,
-    ignore_range_fr=None,
-) -> np.ndarray:
-    import numpy as np
-
-    threshold = threshold_function(audio)
-
-    if crossing_direction == "down":  # get downward crossings; eg, video frames
-        a_thresholded = audio <= threshold
-    elif crossing_direction == "up":  # get upward crossings
-        a_thresholded = audio >= threshold
-    else:
-        raise ValueError(
-            f"'{crossing_direction}' is not a valid crossing_direction. Must be 'up' or 'down'."
-        )
-
-    # one frame prior. don't allow first frame
-    offset = np.append([1], a_thresholded[:-1])
-
-    frames = np.nonzero(a_thresholded & ~offset)[0]
-
-    if ignore_range_fr is not None:
-        frames = np.array([f for f in frames if f not in range(ignore_range_fr)])
-
-    if allowable_range is not None:
-        # number of audio samples between subsequent frames
-        deltas = frames[1:] - frames[:-1]
-
-        check = False
-        r = np.ptp(deltas)
-
-        if np.isscalar(allowable_range):  # just one number
-            check = r <= allowable_range
-        else:
-            check = (r >= allowable_range[0] & r <= allowable_range[1]).all()
-
-        assert (
-            check
-        ), "Warning! Frame timings might vary too much. You might need a stricter threshold function."
-
-    return frames
+from .audio import get_triggers_from_audio
 
 
 def get_video_frames_from_callback_audio(
@@ -79,7 +34,6 @@ def get_video_frames_from_callback_audio(
 
 
 def open_video(video_path: str) -> cv.VideoCapture:
-    import cv2 as cv
 
     capture = cv.VideoCapture(cv.samples.findFileOrKeep(video_path))
 
@@ -90,7 +44,7 @@ def open_video(video_path: str) -> cv.VideoCapture:
 
 
 def get_video_size(capture: cv.VideoCapture) -> np.ndarray:
-    import cv2 as cv
+
     import numpy as np
 
     width = capture.get(cv.CAP_PROP_FRAME_WIDTH)
@@ -100,7 +54,6 @@ def get_video_size(capture: cv.VideoCapture) -> np.ndarray:
 
 
 def get_video_fourcc(capture: cv.VideoCapture) -> str:
-    import cv2 as cv
 
     h = int(capture.get(cv.CAP_PROP_FOURCC))
 
@@ -115,7 +68,7 @@ def get_video_fourcc(capture: cv.VideoCapture) -> str:
 
 
 def get_video_params(capture: cv.VideoCapture) -> dict:
-    import cv2 as cv
+
     import numpy as np
 
     params = {
@@ -128,7 +81,7 @@ def get_video_params(capture: cv.VideoCapture) -> dict:
 
 
 def write_diff_video(in_file_name: str, out_file_name: str) -> None:
-    import cv2 as cv
+
     import numpy as np
 
     capture = open_video(in_file_name)
@@ -163,7 +116,7 @@ def write_diff_video(in_file_name: str, out_file_name: str) -> None:
 
 
 def play_video(video_path: str, max_frames=np.inf) -> None:
-    import cv2 as cv
+
     import numpy as np
 
     cv.startWindowThread()

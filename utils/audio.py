@@ -1,3 +1,5 @@
+from pathlib import Path
+
 import numpy as np
 from scipy.io import wavfile
 from scipy.signal import butter, filtfilt, ShortTimeFFT
@@ -7,6 +9,7 @@ from sklearn.preprocessing import minmax_scale
 import matplotlib.pyplot as plt
 
 from .evfuncs import load_cbin
+
 
 class AudioObject:
     def __init__(
@@ -41,10 +44,31 @@ class AudioObject:
             self.spectrogram = None
 
     @classmethod
+    def from_file(
+        cls,
+        filename,
+        **kwargs,
+    ):
+        """
+        Tries to determine file type from filename and call relevant loader.
+        """
+
+        ext = str(Path(filename).suffix).lower()
+
+        if ext == ".wav":
+            return cls.from_wav(filename=filename, **kwargs)
+        elif ext == ".cbin":
+            return cls.from_cbin(filename=filename, **kwargs)
+        elif ext == "":
+            raise ValueError("Received a directory! Must receive an audio file.")
+        else:
+            raise ValueError(f"Unknown file extension: {ext}")
+
+    @classmethod
     def from_wav(
         cls,
         filename,
-        channels=0,
+        channel=0,
         channel_names=None,
         **kwargs,
     ):
@@ -56,21 +80,25 @@ class AudioObject:
 
         fs, audio = wavfile.read(filename)
 
-        if channels == "all":
-            channels = np.arange(audio.shape[1])
+        if "channels" in kwargs.keys():
+            channel = kwargs.pop("channels")
+            raise Warning("`channels` has been renamed channel.")
+
+        if channel == "all":
+            channel = np.arange(audio.shape[1])
         else:
-            channels = np.array([channels]).flatten()
+            channel = np.array([channel]).flatten()
 
         if channel_names is None:
-            channel_names = [None] * len(channels)
+            channel_names = [None] * len(channel)
         else:
             assert len(channel_names) == len(
-                channels
-            ), f"Loading {len(channels)} channels, but only {len(channel_names)} channel_names given."
+                channel
+            ), f"Loading {len(channel)} channels, but only {len(channel_names)} channel_names given."
 
         objs = []
 
-        for i, c in enumerate(channels):
+        for i, c in enumerate(channel):
             new_obj = cls(
                 audio[:, c],
                 fs,
@@ -120,6 +148,23 @@ class AudioObject:
                 new_obj[i].file = filename
 
         return new_obj
+
+    @classmethod
+    def plot_file(cls, filename, channel="all"):
+        aos = cls.from_file(filename, channel=channel)
+
+        if not isinstance(aos, list):
+            aos = [aos]
+
+        fig, axs = plt.subplots(nrows=len(aos), sharex=True)
+
+        for ch, ax in zip(aos, axs):
+            ax.plot(ch.get_x(), ch.audio)
+
+        axs[0].set_title(filename, wrap=True)
+        axs[-1].set(xlabel="time (s)")
+
+        return fig, axs, aos
 
     def filtfilt(self, b, a):
         self.audio_filt = filtfilt(b, a, self.audio)
@@ -194,6 +239,53 @@ class AudioObject:
         """
 
         return len(self.audio) / self.fs
+
+
+def get_triggers_from_audio(
+    audio: np.ndarray,
+    threshold_function=lambda x: 10 * np.mean(x),
+    crossing_direction="up",
+    allowable_range=None,
+    ignore_range_fr=None,
+) -> np.ndarray:
+    import numpy as np
+
+    threshold = threshold_function(audio)
+
+    if crossing_direction == "down":  # get downward crossings; eg, video frames
+        a_thresholded = audio <= threshold
+    elif crossing_direction == "up":  # get upward crossings
+        a_thresholded = audio >= threshold
+    else:
+        raise ValueError(
+            f"'{crossing_direction}' is not a valid crossing_direction. Must be 'up' or 'down'."
+        )
+
+    # one frame prior. don't allow first frame
+    offset = np.append([1], a_thresholded[:-1])
+
+    frames = np.nonzero(a_thresholded & ~offset)[0]
+
+    if ignore_range_fr is not None:
+        frames = np.array([f for f in frames if f not in range(ignore_range_fr)])
+
+    if allowable_range is not None:
+        # number of audio samples between subsequent frames
+        deltas = frames[1:] - frames[:-1]
+
+        check = False
+        r = np.ptp(deltas)
+
+        if np.isscalar(allowable_range):  # just one number
+            check = r <= allowable_range
+        else:
+            check = (r >= allowable_range[0]) and (r <= allowable_range[1])
+
+        assert (
+            check
+        ), "Warning! Frame timings might vary too much. You might need a stricter threshold function."
+
+    return frames
 
 
 def plot_spectrogram(

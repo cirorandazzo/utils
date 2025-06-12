@@ -1,6 +1,10 @@
 # utils/umap.py
 
 from math import floor, ceil
+import os
+from pathlib import Path
+import pickle
+import time
 
 import numpy as np
 import pandas as pd
@@ -9,15 +13,87 @@ import matplotlib.pyplot as plt
 from matplotlib.collections import LineCollection
 from matplotlib.colors import ListedColormap, Normalize, to_rgba
 
+import umap
 import hdbscan
 
 from .file import parse_birdname
 from .plot import remap_cmap
 
 
+def run_umap_gridsearch(
+    data,
+    conditions,
+    embedding_path,
+    label,
+    do_plot=True,
+    overwrite=False,
+):
+    errors = {}
+
+    embedding_path = Path(embedding_path)
+
+    # run gridsearch
+    for i, condition in enumerate(conditions):
+        umap_name = f"embedding{i:03}-{label}"
+
+        # don't make new embedding if already extant
+        if os.path.exists(embedding_path / f"{umap_name}.pickle") and (not overwrite):
+            print(f"#{i} exists! Skipping...")
+            continue
+        else:
+            # report start
+            print(f"- Embedding {i:02} / {len(conditions):02} ({label}):")
+            print(f"\t- {condition}")
+
+        # write to log
+        with open(embedding_path / "log.txt", "a") as f:
+            f.write(f"- embedding{i}:\n")
+
+            for k, v in condition.items():
+                f.write(f"  - {k}: {v}\n")
+
+        # train umap
+        try:
+            start_time = time.time()
+            print("\t- Starting fit...")
+
+            model = umap.UMAP(**condition, verbose=True)
+            embedding = model.fit_transform(data)
+
+            print(f"\t- Done fitting! Took {time.time() - start_time}s.")
+        except Exception as e:
+            errors[i] = e
+            print(f"\t- Error on #{i}! Skipping...")
+            continue
+
+        # save model
+        with open(embedding_path / f"{umap_name}.pickle", "wb") as f:
+            pickle.dump(model, f)
+
+        # plot
+        if do_plot:
+            fig, ax = plt.subplots()
+            sc = ax.scatter(
+                embedding[:, 0],
+                embedding[:, 1],
+                s=4,
+                alpha=0.3,
+            )
+            ax.set(
+                xlabel="UMAP1",
+                ylabel="UMAP2",
+                title=umap_name,
+            )
+
+            fig.savefig(embedding_path / f"{umap_name}.jpg")
+            plt.close(fig)
+
+    return errors
+
+
 def get_call_segments(df, type="exp", exclude_song=True, return_index=False):
     """
-    from df, return only rows that: 
+    from df, return only rows that:
         (1) are part of a putative call breath cycle
         (2) have the correct type ("exp" for call expiration; "insp" for directly preceding inspiration)
         (3) probably aren't song (ie, aren't directly followed by another "call") - unlikely to have calls on subsequent breaths
@@ -43,7 +119,7 @@ def get_call_segments(df, type="exp", exclude_song=True, return_index=False):
     # if the prev/next exp also surpassed amplitude threshold, it's probably song.
     if exclude_song:
 
-        # check whether each breath seg of interest is also a call 
+        # check whether each breath seg of interest is also a call
         ii_song = df.apply(
             lambda x: any(
                 [
@@ -177,7 +253,10 @@ def plot_embedding_data(
     set_kwargs = {**set_kwargs}  # Copy to avoid modifying input
 
     if "title" not in set_kwargs.keys():
-        set_kwargs["title"] = f"{embedding_name}: {plot_type.upper()}"
+        if plot_type is None:
+            set_kwargs["title"] = f"{embedding_name}"
+        else:
+            set_kwargs["title"] = f"{embedding_name}: {plot_type.upper()}"
 
     if cmap_name is None:
         # Default colormaps based on plot type
@@ -272,6 +351,15 @@ def plot_embedding_data(
         cbar_label = "bird_id"
         cbar_ticks = np.arange(n_birds)
         cbar_tick_labels = birdnames.unique()
+
+    elif plot_type == "dataset":
+        datasets = pd.Categorical(df["dataset"])
+        n_datasets = len(datasets.unique())
+        cmap = plt.get_cmap(cmap_name, n_datasets)
+
+        plot_type_kwargs = dict(c=datasets.codes, cmap=cmap)
+        cbar_ticks = np.arange(n_datasets)
+        cbar_tick_labels = datasets.unique()
         cbar_label = None
 
     elif plot_type in ["insp_onset", "insp_offset"]:
@@ -361,7 +449,7 @@ def get_discrete_cmap(
     masked_clusters=None,
 ):
     """
-    Gets a discrete colormap 
+    Gets a discrete colormap
     """
 
     vmin = floor(vmin)
@@ -643,7 +731,7 @@ def select_traces(all_breaths, cluster_labels, traces, select):
 
     traces = traces[ii_select]
     cluster_labels = cluster_labels[ii_select]
-    
+
     return traces, cluster_labels
 
 
@@ -854,20 +942,17 @@ def prepare_clusters_axs_dict(labels, nrows=1, ncols=1, **subplots_kwargs):
     """
     n_figs = int(np.ceil(len(labels) / (nrows * ncols)))
 
-    outs = np.array(
-        [
-            plt.subplots(nrows=nrows, ncols=ncols, **subplots_kwargs)
-            for i in range(n_figs)
-        ]
-    )
+    outs = [
+        plt.subplots(nrows=nrows, ncols=ncols, **subplots_kwargs) for i in range(n_figs)
+    ]
 
-    figs = outs[:, 0]
-    axs = np.stack(outs[:, 1])
+    figs, axs = zip(*outs)
+    axs = np.stack(axs)
 
     axs_dict = {l: ax for l, ax in zip(labels, axs.ravel()[: len(labels)])}
 
     # set remaining axes off
-    for ax in axs.ravel()[len(labels):]:
+    for ax in axs.ravel()[len(labels) :]:
         ax.set_axis_off()
 
     return figs, axs, axs_dict

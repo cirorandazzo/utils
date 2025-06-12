@@ -1,6 +1,8 @@
 # file.py
 #
 
+import re
+
 import datetime
 import json
 import os
@@ -237,13 +239,29 @@ def parse_parameter_from_string(
 
 def parse_birdname(
     string,
-    birdname_regex=r"([a-z]{1,2}[0-9]{1,2}){2}",
+    birdname_regex=r"(?:[a-z]{1,2}[0-9]{1,2}){2}",
 ):
     """
     Cuts out typical bird identifier from a string. Default format: AA#(#)AA#(#), where A is a letter, # is an obligate number, and (#) is an optional number.
     """
+    matches = re.findall(birdname_regex, string)
 
-    return re.search(birdname_regex, string)[0]
+    if len(matches) == 0:
+        raise BirdNameException(f"Could not parse birdname from string: {string}")
+
+    # assert there's a single unique match
+    matches = list(set(matches))
+
+    if len(matches) > 1:
+        raise BirdNameException(
+            f"Found multiple birdname matches in string: {string}. Matches: {' | '.join(matches)}"
+        )
+    else:
+        return matches[0]
+
+
+class BirdNameException(ValueError):
+    pass
 
 
 def datetime_string(dt=None, format="%Y%m%d%H%M%S"):
