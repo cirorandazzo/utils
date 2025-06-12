@@ -245,3 +245,14 @@ def parse_birdname(
 
     return re.search(birdname_regex, string)[0]
 
+
+def datetime_string(dt=None, format="%Y%m%d%H%M%S"):
+    """
+    Return a datetime as string in specified format.
+    """
+
+    if dt is None:
+        dt = datetime.datetime.now()
+    timestr = dt.strftime(format)
+
+    return timestr
