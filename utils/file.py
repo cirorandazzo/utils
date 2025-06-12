@@ -14,7 +14,7 @@ import pandas as pd
 from pymatreader import read_mat
 
 
-def save_dataframe_with_np(df, path, serialize_types=np.ndarray):
+def save_dataframe_with_np(df, path, serialize_types=(list, np.ndarray)):
     """
     Save df, a pd DataFrame, to a csv file at path. Serialize types listed in serialize_types. Eg, useful for numpy arrays.
     """

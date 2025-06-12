@@ -199,7 +199,7 @@ def construct_stim_trial_df(
     stim_trials["calls_in_range"] = stim_trials.apply(get_calls, axis=1)
 
     stim_trials["call_types"] = stim_trials["calls_in_range"].apply(
-        lambda trial: [calls.loc[i, "type"] for i in trial]
+        lambda trial: np.array([calls.loc[i, "type"] for i in trial])
     )
 
     stim_trials["call_times_stim_aligned"] = stim_trials.apply(
@@ -262,7 +262,7 @@ def _get_calls_in_range(calls, range_start, range_end, exclude_stimulus=True):
         call_in_range = call_in_range & ~i_stim
 
     # return indices of calls in range
-    return list(calls[call_in_range].index.get_level_values("calls_index"))
+    return np.array(calls[call_in_range].index.get_level_values("calls_index"))
 
 
 def _get_call_times(trial, calls_df, stimulus_aligned=True):
