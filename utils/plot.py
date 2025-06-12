@@ -31,6 +31,10 @@ def plot_callback_heatmap(
     block_labels=None,
     **imshow_kwargs,
 ):
+    """
+    Given df_trials, plot a heatmap of a given field by day/block.
+    """
+
     if fig is None:
         fig, ax = plt.subplots()
     else:
@@ -149,15 +153,15 @@ def plot_callback_raster(
     boxes["Stimulus"] = []  # stimulus will be deleted later if not plotting.
 
     # Iterate through trials and create rectangles for each call and stimulus
-    for i, trial_i in enumerate(data.index):
+    for i, (_, row) in enumerate(data.iterrows()):
         height = i + y_offset
 
         # Create rectangle for stimulus block
-        stim_duration = data.loc[trial_i, "stim_duration_s"]
+        stim_duration = row["stim_duration_s"]
         boxes["Stimulus"].append(Rectangle((0, height), stim_duration, 1))
 
-        call_types = data.loc[trial_i, "call_types"]
-        call_times = data.loc[trial_i, "call_times_stim_aligned"]
+        call_types = row["call_types"]
+        call_times = row["call_times_stim_aligned"]
 
         # Add rectangles for each call
         for call_type, (st, en) in zip(call_types, call_times):
