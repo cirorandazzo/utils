@@ -5,11 +5,16 @@
 #
 # Renamed callbacks.py from deepsqueak.py
 
+import numpy as np
+import pandas as pd
+
+from pymatreader import read_mat
+
 ESA_LOOKUP = {"c": "Call", "s": "Stimulus", "n": "Song", "z": "Song"}
 
 
 def call_mat_stim_trial_loader(
-    file,
+    file=None,
     data=None,
     acceptable_call_labels=["Call", "Stimulus"],
     from_notmat=False,
@@ -22,10 +27,6 @@ def call_mat_stim_trial_loader(
     """
     Given (1) a .mat from DeepSqueak, (2) a .not.mat from evsonganaly, or (3) a dictionary which looks like loaded data from one of these, make a trial-by-trial dataframe of callbacks.
     """
-    import numpy as np
-    import pandas as pd
-
-    from pymatreader import read_mat
 
     if verbose:
         print(f"Reading file: {file}")
@@ -66,7 +67,7 @@ def call_mat_stim_trial_loader(
     if verbose:
         print(f"Rejecting call types not in: {acceptable_call_labels}")
 
-    assert (
+    assert (acceptable_call_labels == None) or (
         stim_type_label in acceptable_call_labels
     ), f"Warning! Using label `{stim_type_label}` used to align trials but not listed as an acceptable call type."
 
@@ -84,6 +85,7 @@ def call_mat_stim_trial_loader(
 
     return calls, stim_trials, rejected_trials, file_info, call_types
 
+
 def make_calls_df_from_notmat(
     file,
 ):
@@ -92,8 +94,6 @@ def make_calls_df_from_notmat(
 
     Useful if you don't want to do more callback pipeline steps (eg, in the case of spontaneous recordings.)
     """
-    
-    from pymatreader import read_mat
 
     data = read_mat(file)
 
@@ -106,9 +106,6 @@ def read_calls_from_mat(
     """
     Reads calls from a .mat containing callback labels (either deepsqueak or evsonganaly .not.mat)
     """
-
-    import numpy as np
-    import pandas as pd
 
     if from_notmat:
         calls = pd.DataFrame()
@@ -142,8 +139,6 @@ def _read_file_info_from_mat(
     """
     Reads file metadata from a .mat containing callback labels (either deepsqueak or evsonganaly .not.mat)
     """
-    import numpy as np
-    import pandas as pd
 
     if from_notmat:
         # TODO: deal with file info
@@ -173,8 +168,6 @@ def construct_stim_trial_df(
     """
     TODO: document
     """
-    import pandas as pd
-    import numpy as np
 
     stims = calls[calls["type"] == stim_type_label]
 
@@ -205,7 +198,7 @@ def construct_stim_trial_df(
     stim_trials["calls_in_range"] = stim_trials.apply(get_calls, axis=1)
 
     stim_trials["call_types"] = stim_trials["calls_in_range"].apply(
-        lambda trial: [calls.loc[i, "type"] for i in trial]
+        lambda trial: np.array([calls.loc[i, "type"] for i in trial])
     )
 
     stim_trials["call_times_stim_aligned"] = stim_trials.apply(
@@ -247,8 +240,6 @@ def _get_calls_in_range(calls, range_start, range_end, exclude_stimulus=True):
 
     NOTE: range is exclusive to prevent inclusion of next stimulus, since range_end is defined by start of next stimulus
     """
-    import numpy as np
-    import pandas as pd
 
     # either start or end in range is sufficient.
     time_in_range = lambda t: (t > range_start) & (t < range_end)
@@ -270,7 +261,7 @@ def _get_calls_in_range(calls, range_start, range_end, exclude_stimulus=True):
         call_in_range = call_in_range & ~i_stim
 
     # return indices of calls in range
-    return list(calls[call_in_range].index.get_level_values("calls_index"))
+    return np.array(calls[call_in_range].index.get_level_values("calls_index"))
 
 
 def _get_call_times(trial, calls_df, stimulus_aligned=True):
@@ -279,8 +270,6 @@ def _get_call_times(trial, calls_df, stimulus_aligned=True):
 
     given one row/trial from stim_trials df and calls df, get on/off times for all calls in that trial. if stim_aligned is True, timings are adjusted to set stimulus onset as 0.
     """
-
-    import numpy as np
 
     call_ii = trial["calls_in_range"]
 
@@ -302,13 +291,17 @@ def reject_stim_trials(
 ):
     """
     Given stim-aligned dataframe, exclude all trials with call types other than those in acceptable_call_labels)
+
+    If acceptable_call_labels is None, keep all columns. (ie, return input -- for compatability with pipeline.)
     """
-    import numpy as np
-    import pandas as pd
 
     call_types = stim_trials["calls_in_range"].apply(
         lambda x: calls["type"].loc[x].value_counts()
     )  # get call types
+
+    # keep all trials regardless of call type
+    if acceptable_call_labels is None:
+        acceptable_call_labels = [c for c in call_types.columns]
 
     keep_columns = [c for c in call_types.columns if c in acceptable_call_labels]
     call_types_rejectable = call_types.drop(
