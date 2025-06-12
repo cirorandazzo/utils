@@ -436,7 +436,7 @@ def plot_callback_raster_multiday(
     # Plot data for each day
     for day in days:
         day_locs.append(y_offset)  # Store y-position of the current day
-        data_day = data.xs(day)  # Get data for the current day
+        data_day = data.xs(key=day, level="day")  # Get data for the current day
 
         # Plot multi-block raster for this day
         plot_callback_raster_multiblock(
