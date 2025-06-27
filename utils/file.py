@@ -1,12 +1,60 @@
 # file.py
 #
 
+import re
+
+import datetime
+import json
+import os
+import re
+import subprocess
+
+import numpy as np
+import pandas as pd
+
+
+from pymatreader import read_mat
+
+
+def save_dataframe_with_np(df, path, serialize_types=(list, np.ndarray)):
+    """
+    Save df, a pd DataFrame, to a csv file at path. Serialize types listed in serialize_types. Eg, useful for numpy arrays.
+    """
+
+    df_serial = df.copy()
+
+    # serialize columns containing specified datatypes
+    for col in df_serial.columns:
+        if df_serial[col].apply(lambda x: isinstance(x, serialize_types)).any():
+            df_serial[col] = df_serial[col].apply(lambda x: json.dumps(x.tolist()))
+
+    df_serial.to_csv(path)
+
+    return
+
+
+def load_dataframe_with_np(path):
+    df_loaded = pd.read_csv(path)
+
+    for col in df_loaded.columns:
+        try:
+            df_loaded[col] = df_loaded[col].apply(
+                lambda x: (
+                    np.array(json.loads(x))
+                    if isinstance(x, str) and x.startswith("[")
+                    else x
+                )
+            )
+        except Exception:
+            pass  # Skip if not all values are arrays or deserialization fails
+
+    return df_loaded
+
 
 def multi_index_from_dict(df, index_dict, keep_current_index=True):
     """
     Add Multiindex columns to a pd dataframe given values from a dict. Useful before merging dataframes from separate timepoints, for example.
     """
-    import pandas as pd
 
     df_indexed = df.copy()
 
@@ -26,10 +74,6 @@ def load_syllable_mat(
     filename,
     parse_nextSyl=True,
 ):
-    import pandas as pd
-
-    from pymatreader import read_mat
-
     data = read_mat(filename)
 
     data = data["by_syllable"]
@@ -54,11 +98,6 @@ def load_syllable_mat(
 
 
 def load_burst_mat(file):
-    import numpy as np
-    import pandas as pd
-
-    from pymatreader import read_mat
-
     data = read_mat(file)
 
     bp_syl_num = data.pop("BPsylNum")
@@ -151,8 +190,6 @@ def convert_image(
     This function requires Inkscape to be installed and accessible from the command line.
     Ensure that the file path provided points to a valid image file.
     """
-    import os
-    import subprocess
 
     if filepath.endswith("png"):  # is already png
         filepath_new = filepath
@@ -183,9 +220,6 @@ def parse_parameter_from_string(
     """
     Note: rejects `chars_to_ignore` characters after parameter_name match, eg, 1 if there's a symbol there (eg, "max_features_7" --> "7")
     """
-    import re
-
-    import numpy as np
 
     whole_match = re.search(rf"({parameter_name})(\w\.?)+", string)
 
@@ -205,11 +239,38 @@ def parse_parameter_from_string(
 
 def parse_birdname(
     string,
-    birdname_regex=r"([a-z]{1,2}[0-9]{1,2}){2}",
+    birdname_regex=r"(?:[a-z]{1,2}[0-9]{1,2}){2}",
 ):
     """
     Cuts out typical bird identifier from a string. Default format: AA#(#)AA#(#), where A is a letter, # is an obligate number, and (#) is an optional number.
     """
-    import re
+    matches = re.findall(birdname_regex, string)
 
-    return re.search(birdname_regex, string)[0]
+    if len(matches) == 0:
+        raise BirdNameException(f"Could not parse birdname from string: {string}")
+
+    # assert there's a single unique match
+    matches = list(set(matches))
+
+    if len(matches) > 1:
+        raise BirdNameException(
+            f"Found multiple birdname matches in string: {string}. Matches: {' | '.join(matches)}"
+        )
+    else:
+        return matches[0]
+
+
+class BirdNameException(ValueError):
+    pass
+
+
+def datetime_string(dt=None, format="%Y%m%d%H%M%S"):
+    """
+    Return a datetime as string in specified format.
+    """
+
+    if dt is None:
+        dt = datetime.datetime.now()
+    timestr = dt.strftime(format)
+
+    return timestr
