@@ -4,6 +4,7 @@
 # Plotting functions
 #
 
+from collections.abc import Iterable
 import itertools
 
 import numpy as np
@@ -212,6 +213,129 @@ def plot_callback_raster(
     )
 
     return ax
+
+
+def plot_callback_raster_multiscale(
+    data,
+    ax=None,
+    timescale_columns=["day", "block"],  # List of columns to split by, from coarse to granular
+    plot_hlines=True,
+    hline_kwargs=None,
+    sec_axis_labels=True,
+    y_offset_initial=0,
+    **raster_plot_kwargs,
+):
+    """
+    Plot callback raster plots for multiple timescales, such as day and block, with horizontal lines separating them.
+    
+    This function takes a DataFrame indexed by multiple levels (e.g., day, block) and plots a callback raster.
+    Horizontal lines separate each timescale, with optional secondary y-axes for labels.
+
+    Parameters:
+    - data: pandas DataFrame, indexed by the timescales to be separated (e.g., day, block).
+    - ax: matplotlib Axes object (optional).
+    - timescale_columns: list of strings, column names to split by (default: ["day", "block"]).
+    - plot_hlines: bool, optional (default: True), whether to plot horizontal lines separating the blocks/days.
+    - hline_xlim: list of float, optional (default: [-0.1, 3]), the x-axis limits for the horizontal lines.
+    - hline_kwargs: dict, optional (default: None), keyword arguments for customizing the horizontal lines.
+    - show_sec_axis: bool, optional (default: True), whether to show the secondary y-axis for labels.
+    - y_offset_initial: int, optional (default: 0), the initial vertical offset for the first timescale.
+    - **raster_plot_kwargs: additional keyword arguments passed to `plot_callback_raster` for customizing individual plots.
+
+    Returns:
+    - ax: matplotlib Axes object with the final plot.
+    """
+    
+    # Create a new figure and axis if none are provided
+    if ax is None:
+        fig, ax = plt.subplots()
+
+    # check for nans in timescale
+    ii_nan = data.index.to_frame()[timescale_columns].apply(lambda x: any(x.isna()), axis=1)
+    
+    if any(ii_nan):
+        raise ValueError(f"Data has nan in one of requested `timescale_columns`: {timescale_columns}")
+
+    # Extract and order the timescales
+    data = data.sort_index(level=timescale_columns)
+    
+    # Initialize vertical offset and locations for horizontal lines
+    y_offset = y_offset_initial
+    locs={}
+
+    for times, data_subset in data.groupby(by=timescale_columns):
+        locs[times] = y_offset
+
+        plot_callback_raster(
+            data_subset,
+            ax=ax,
+            y_offset=y_offset,
+            **raster_plot_kwargs,
+        )
+
+        y_offset += len(data_subset)
+
+
+    locs = pd.Series(
+        index=pd.MultiIndex.from_tuples(locs.keys(), names=timescale_columns),
+        data=locs.values(),
+    )
+
+    # Optionally plot horizontal lines to separate timescales
+
+    def _get_levels(level_bools):
+        # one bool per level
+        if isinstance(level_bools, Iterable):
+            levels = np.array(timescale_columns)[level_bools]
+        
+        # scalar bool: all levels, or none
+        elif isinstance(level_bools, bool):
+            if level_bools:
+                levels = timescale_columns
+            else:
+                levels = []
+
+        # unrecognized input
+        else:
+            raise ValueError("must be bool or iterable")
+    
+        return list(levels)
+    
+    hline_levels = _get_levels(plot_hlines)
+
+    if hline_levels:
+        if hline_kwargs is None:
+            hline_kwargs = dict(
+                color="k",
+                linestyle="solid",
+                linewidth=0.5,
+            )
+
+        # get first line for each set
+        y = locs.groupby(by=hline_levels).agg("min")
+
+        # Draw the horizontal lines separating the timescales
+        [ax.axhline(y=i, **hline_kwargs) for i in y]
+
+    # Optionally add a secondary y-axis for timescale labels
+    if sec_axis_labels:
+        ax2 = ax.secondary_yaxis(location="right")  # Create secondary y-axis
+        
+        ax2_levels = _get_levels(sec_axis_labels)
+
+        y = locs.groupby(ax2_levels).agg("min")
+
+        ax2.set(
+            ylabel=', '.join(ax2_levels),
+            yticks=list(y),
+            yticklabels=[", ".join([str(t) for t in times]) for times in y.index],  # Label combinations
+        )
+
+    # Automatically adjust the view to fit the data
+    ax.autoscale_view()
+    ax.set(ylim=[0, len(data)])
+
+    return ax, locs
 
 
 def plot_callback_raster_multiblock(
