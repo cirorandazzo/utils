@@ -124,6 +124,7 @@ def read_calls_from_mat(
         calls = pd.DataFrame(data["Calls"])
         calls = calls[["start_s", "end_s", "duration_s", "type"]]  # reorder columns
 
+    calls = calls.sort_values(by="start_s").reset_index(drop=True)
     onsets = np.array(calls["start_s"])
     time_from_prev_onset = [np.NaN] + list(onsets[1:] - onsets[:-1])
     calls["time_from_prev_onset_s"] = time_from_prev_onset
