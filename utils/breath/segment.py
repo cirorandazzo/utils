@@ -10,8 +10,8 @@
 import numpy as np
 
 from scipy.signal import find_peaks, peak_prominences
-from scipy.stats import gaussian_kde
 
+from utils.distributions import get_kde_distribution as moved_kde_function
 
 def segment_breaths(
     breathing_unfilt,
@@ -134,31 +134,13 @@ def fit_breath_distribution(breath, **kde_kwargs):
 
     return x_dist, dist_kde, trough_ii, amplitude_ii
 
-
-def get_kde_distribution(data, xlim=None, xsteps=100, x_dist=None, **kwargs):
+def get_kde_distribution(*args, **kwargs):
     """
-    TODO: docstring
-
+    Function moved to utils.distributions.get_kde_distribution
+    
+    This wrapper maintained for compatibility.
     """
-
-    data = np.array(data)
-
-    # Perform Kernel Density Estimation (KDE) to create a smooth distribution
-    kde = gaussian_kde(data, **kwargs)
-
-    # Sample from kde distribution
-    if x_dist is None:
-        if xlim is None:
-            xlim = (data.min(), data.max())
-
-        # Generate evenly spaced x-values covering the range of the breath data
-        x_dist = np.linspace(*xlim, xsteps)
-
-    # return sampled distr
-    y_dist = kde(x_dist)
-
-    return kde, x_dist, y_dist
-
+    return moved_kde_function(*args, **kwargs)
 
 def get_kde_threshold(breath, **fit_kwargs):
     """

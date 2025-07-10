@@ -5,6 +5,8 @@
 #
 # Renamed callbacks.py from deepsqueak.py
 
+from warnings import warn
+
 import numpy as np
 import pandas as pd
 
@@ -19,6 +21,7 @@ def call_mat_stim_trial_loader(
     acceptable_call_labels=["Call", "Stimulus"],
     from_notmat=False,
     min_latency=0,
+    max_latency=None,
     calls_index_name="calls_index",
     stims_index_name="stims_index",
     stim_type_label="Stimulus",
@@ -54,6 +57,7 @@ def call_mat_stim_trial_loader(
         audio_duration=file_info["wav_duration_s"],
         stim_type_label=stim_type_label,
         min_latency=min_latency,
+        max_latency=max_latency,
         calls_index_name=calls_index_name,
         stims_index_name=stims_index_name,
     )
@@ -69,7 +73,7 @@ def call_mat_stim_trial_loader(
 
     assert (acceptable_call_labels == None) or (
         stim_type_label in acceptable_call_labels
-    ), f"Warning! Using label `{stim_type_label}` used to align trials but not listed as an acceptable call type."
+    ), f"Label `{stim_type_label}` used to align trials but not listed as an acceptable call type."
 
     stim_trials, rejected_trials, call_types = reject_stim_trials(
         stim_trials,
@@ -162,7 +166,8 @@ def construct_stim_trial_df(
     calls,
     audio_duration,
     stim_type_label,
-    min_latency,
+    min_latency=None,
+    max_latency=None,
     calls_index_name="calls_index",
     stims_index_name="stims_index",
 ):
@@ -175,18 +180,30 @@ def construct_stim_trial_df(
     stim_trials = pd.DataFrame()
 
     if len(stims) == 0:
-        import warnings
-
-        warnings.warn("No stimuli found in this file!")
+        warn("No stimuli found in this file!")
 
         return None
 
     # trial start: stimulus onset
     stim_trials["trial_start_s"] = stims["start_s"]
 
-    # trial end: onset of following stimulus
-    trial_ends = list(stims.start_s[1:])
-    trial_ends.append(audio_duration)
+    # trial end
+    # by default, onset of following stimulus
+    next_stim_start = list(stims.start_s[1:])
+    next_stim_start.append(audio_duration)
+    
+    # or, particular latency. max length is start of next trial.
+    if max_latency is None:
+        trial_ends = next_stim_start
+    else:
+        start_plus_latency = np.array(stims.start_s + max_latency)
+
+        trial_ends = np.minimum(next_stim_start, start_plus_latency)
+
+        n_defaulted = sum(trial_ends != start_plus_latency)
+        if n_defaulted > 0:
+            warn(f"max_latency was too long for {n_defaulted} trials. Defaulted end of this trial to onset of next stimulus.")
+
     stim_trials["trial_end_s"] = pd.Series(trial_ends, index=stims.index)
 
     stim_trials["stim_duration_s"] = stims["duration_s"]
@@ -202,6 +219,7 @@ def construct_stim_trial_df(
         lambda trial: np.array([calls.loc[i, "type"] for i in trial])
     )
 
+    # (n_calls)x2 numpy array: (onset, offset) of call aligned to stim onset
     stim_trials["call_times_stim_aligned"] = stim_trials.apply(
         _get_call_times,
         calls_df=calls,
@@ -214,6 +232,7 @@ def construct_stim_trial_df(
         for calls in stim_trials["call_times_stim_aligned"]
     ]
 
+    # compute latency
     onsets = [
         calls[:, 0] if len(calls) > 0 else np.array([])
         for calls in stim_trials["call_times_stim_aligned"]
