@@ -90,9 +90,7 @@ def call_mat_stim_trial_loader(
     return calls, stim_trials, rejected_trials, file_info, call_types
 
 
-def make_calls_df_from_notmat(
-    file,
-):
+def make_calls_df_from_notmat(file):
     """
     Wrapper function for accessibility. Read calls from an evsonganaly .not.mat file into calls_df structure.
 
@@ -103,12 +101,16 @@ def make_calls_df_from_notmat(
 
     return read_calls_from_mat(data, from_notmat=True)
 
+
 def read_calls_from_mat(
     data,
     from_notmat,
+    notmat_lookup_dict=ESA_LOOKUP,
 ):
     """
     Reads calls from a .mat containing callback labels (either deepsqueak or evsonganaly .not.mat)
+
+    notmat_lookup_dict: if loading from a notmat file, replace 1-character code with a name (eg: "c":"Call"). Pass empty dict to maintain
     """
 
     if from_notmat:
@@ -116,7 +118,7 @@ def read_calls_from_mat(
         calls["start_s"] = np.atleast_1d(data["onsets"]) / 1000
         calls["end_s"] = np.atleast_1d(data["offsets"]) / 1000
         calls["duration_s"] = calls["end_s"] - calls["start_s"]
-        calls["type"] = [ESA_LOOKUP.get(l, l) for l in data["labels"]]
+        calls["type"] = [notmat_lookup_dict.get(l, l) for l in data["labels"]]
 
     else:
         assert "Calls" in data.keys()
