@@ -6,6 +6,7 @@
 
 from collections.abc import Iterable
 import itertools
+import warnings
 
 import numpy as np
 import pandas as pd
@@ -394,6 +395,8 @@ def plot_callback_raster_multiblock(
 
     """
 
+    warnings.warn("Recommended: shift complex raster plots to `utils.plot.plot_callback_raster_multiscale`")
+
     # Create a new figure and axis if none are provided
     if ax is None:
         fig, ax = plt.subplots()
@@ -533,6 +536,8 @@ def plot_callback_raster_multiday(
     ax = plot_callback_raster_multiday(data, show_day_axis=True)
     ```
     """
+
+    warnings.warn("Recommended: shift complex raster plots to `utils.plot.plot_callback_raster_multiscale`")
 
     # Create a new figure and axis if none are provided
     if ax is None:
