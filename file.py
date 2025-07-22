@@ -179,6 +179,7 @@ def parse_parameter_from_string(
     parameter_name,
     chars_to_ignore=1,
     return_nan=False,
+    parameter_allowable=r"\w\.?",
 ):
     """
     Note: rejects `chars_to_ignore` characters after parameter_name match, eg, 1 if there's a symbol there (eg, "max_features_7" --> "7")
@@ -187,7 +188,7 @@ def parse_parameter_from_string(
 
     import numpy as np
 
-    whole_match = re.search(rf"({parameter_name})(\w\.?)+", string)
+    whole_match = re.search(rf"({parameter_name})({parameter_allowable})+", string)
 
     if whole_match is not None:
         # return everything after "parameter_name"

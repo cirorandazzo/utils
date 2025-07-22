@@ -149,7 +149,7 @@ def _read_file_info_from_mat(
         # TODO: deal with file info
         file_info = dict(
             wav_duration_s=np.inf,
-            wav_filename=None,
+            wav_filename=data.get("fname"),
             # birdname=None,
             # d=-1,
             # block=-1,

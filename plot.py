@@ -34,6 +34,9 @@ def plot_callback_raster(
     stim_boxes = []
     call_boxes = []
 
+    # TODO: also read in call type info & dynamically group by type.
+    # boxes = { type : [] for type in }
+
     for i, trial_i in enumerate(data.index):
         height = i + y_offset
 
